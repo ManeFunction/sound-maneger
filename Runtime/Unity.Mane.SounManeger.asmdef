@@ -1,0 +1,15 @@
+{
+    "name": "Mane.SounManeger",
+    "references": [
+        "GUID:b9e9361994ace05428f40ef969514c52"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
