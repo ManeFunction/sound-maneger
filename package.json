@@ -6,7 +6,7 @@
   "unity": "2019.1",
   "unityRelease": "0b5",
   "dependencies": {
-    "com.manefunction.utils": "1.0.1"
+    "com.manefunction.utils": "https://github.com/ManeFunction/unity-mane.git"
  },
  "keywords": [
     "sound",
