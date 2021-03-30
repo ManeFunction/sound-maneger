@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Mane.Extensions;
 using UnityEngine;
 using UnityEngine.Audio;
-using Random = UnityEngine.Random;
 
 namespace Mane.SoundManeger
 {
@@ -409,7 +408,7 @@ namespace Mane.SoundManeger
                     int old = _playlistPointer;
                     do
                     {
-                        _playlistPointer = Random.Range(0, _playlist.Count);
+                        _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
                     } while (_playlistPointer == old);
                 }
             }
