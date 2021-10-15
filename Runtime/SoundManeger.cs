@@ -38,9 +38,10 @@ namespace Mane.SoundManeger
         }
         
 
-        [Header("Sources")]
         [SerializeField] private AudioMixer _mixer;
+        [SerializeField] private AudioListener _listener;
 
+        [Header("Sources")]
         [SerializeField] private AudioSource _musicSource1;
         [SerializeField] private AudioSource _musicSource2;
         [SerializeField] private AudioSource _sfxSource;
@@ -136,6 +137,8 @@ namespace Mane.SoundManeger
 
 
         public AudioMixer Mixer => _mixer;
+
+        public AudioListener Listener => _listener;
 
         public AudioMixerGroup MusicGroup =>
             _mixer.FindMatchingGroups("Master/BGM/MusicAdd").First();
