@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Mane.Extensions;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -38,13 +39,13 @@ namespace Mane.SoundManeger
         
 
         [Header("Sources")]
-        [SerializeField] private AudioMixer _mixer = null;
+        [SerializeField] private AudioMixer _mixer;
 
-        [SerializeField] private AudioSource _musicSource1 = null;
-        [SerializeField] private AudioSource _musicSource2 = null;
-        [SerializeField] private AudioSource _sfxSource = null;
-        [SerializeField] private AudioSource _duckBgmSource = null;
-        [SerializeField] private AudioSource _duckAllSource = null;
+        [SerializeField] private AudioSource _musicSource1;
+        [SerializeField] private AudioSource _musicSource2;
+        [SerializeField] private AudioSource _sfxSource;
+        [SerializeField] private AudioSource _duckBgmSource;
+        [SerializeField] private AudioSource _duckAllSource;
         
         [Header("Settings")]
         [SerializeField] private float _transitionTime = 1.5f;
@@ -63,7 +64,7 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music2LowSnapshot;
 
 
-        private static SoundManeger _instance = null;
+        private static SoundManeger _instance;
 
         public static SoundManeger Instance
         {
@@ -89,12 +90,13 @@ namespace Mane.SoundManeger
         private bool _activeFirstMusicSource;
         private bool _lowpass;
 
-        private bool _muteMusic = false;
-        private bool _muteSfx = false;
+        private bool _muteMusic;
+        private bool _muteSfx;
         private float _cachedBgmVolume = .8f;
         private float _cachedSfxVolume = .8f;
 
         // used to keep active clips and prevent unloading while playing
+        // ReSharper disable once CollectionNeverQueried.Local
         private readonly List<AudioClip> _activeSfx = new List<AudioClip>();
         private readonly Dictionary<string, List<float>> _limitedSfxTimings = new Dictionary<string, List<float>>();
 
@@ -131,6 +133,21 @@ namespace Mane.SoundManeger
             _music2Snapshot = _mixer.FindSnapshot("Music2");
             _music2LowSnapshot = _mixer.FindSnapshot("Music2Lowpass");
         }
+
+
+        public AudioMixer Mixer => _mixer;
+
+        public AudioMixerGroup MusicGroup =>
+            _mixer.FindMatchingGroups("Master/BGM/MusicAdd").First();
+        
+        public AudioMixerGroup SfxGroup =>
+            _mixer.FindMatchingGroups("Master/SFX/Effects").First();
+        
+        public AudioMixerGroup SfxDuckMusicGroup =>
+            _mixer.FindMatchingGroups("Master/SFX/FadeBgm").First();
+        
+        public AudioMixerGroup SfxDuckAllGroup =>
+            _mixer.FindMatchingGroups("Master/SFX/FadeAll").First();
 
 
         public float TransitionTime
@@ -495,7 +512,7 @@ namespace Mane.SoundManeger
         public void StopVoice() => _duckBgmSource.Stop();
 
 
-        public static AudioClip GetClip(string path) => Resources.Load<AudioClip>(path);
+        private static AudioClip GetClip(string path) => Resources.Load<AudioClip>(path);
 
 
         private void Update()

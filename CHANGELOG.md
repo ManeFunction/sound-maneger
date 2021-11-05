@@ -1,3 +1,7 @@
+1.1.0:
+    - Added exposed properties for different audio channels and a Mixer.
+    - Added custom music channel to connect your own music audio sources.
+
 1.0.6:
     - Reserealized assets.
 
