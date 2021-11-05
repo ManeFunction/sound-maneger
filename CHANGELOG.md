@@ -1,3 +1,6 @@
+1.1.1:
+    - Added code to access default AudioListener.
+
 1.1.0:
     - Added exposed properties for different audio channels and a Mixer.
     - Added custom music channel to connect your own music audio sources.
