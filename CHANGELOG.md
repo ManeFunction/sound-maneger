@@ -1,3 +1,6 @@
+1.1.3:
+    - Fixed broken dependencies by the last commit, upped again to 1.6.0.
+
 1.1.2:
     - Fixed Mane Tools dependencies, updated to the latest at the time (1.5.38).
 
