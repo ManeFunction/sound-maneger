@@ -1,3 +1,6 @@
+1.1.2:
+    - Fixed Mane Tools dependencies, updated to the latest at the time (1.5.38).
+
 1.1.1:
     - Added code to access default AudioListener.
 
