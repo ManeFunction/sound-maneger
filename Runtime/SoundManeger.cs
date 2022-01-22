@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -255,11 +255,12 @@ namespace Mane.SoundManeger
                 return;
             }
 
-            float musicTransitionTime = newTransitionTime ?? (_transitionTime);
+            float musicTransitionTime = newTransitionTime ?? _transitionTime;
             if (_activeFirstMusicSource)
             {
                 _musicSource2.clip = clip;
-                _musicSource2.loop = true;
+                if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    _musicSource2.loop = true;
                 _musicSource2.Play();
                 _music2Snapshot.TransitionTo(musicTransitionTime);
                 _activeFirstMusicSource = false;
@@ -267,11 +268,14 @@ namespace Mane.SoundManeger
             else
             {
                 _musicSource1.clip = clip;
-                _musicSource1.loop = true;
+                if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    _musicSource1.loop = true;
                 _musicSource1.Play();
                 _music1Snapshot.TransitionTo(musicTransitionTime);
                 _activeFirstMusicSource = true;
             }
+            
+            _mode |= PlayMode.PlayingMusic;
         }
 
 
@@ -345,7 +349,7 @@ namespace Mane.SoundManeger
             }
 
             // playlist
-            List<string> pl = new List<string>(playlist.Length + 1) {first};
+            List<string> pl = new List<string>(playlist.Length + 1) { first };
             pl.AddRange(playlist);
             StartPlaylist(pl);
         }
@@ -368,6 +372,8 @@ namespace Mane.SoundManeger
             _musicSource1.loop = false;
             _musicSource2.loop = false;
             _mode |= PlayMode.PlaylistActive;
+            // safe way to exclude double subscription
+            OnPlaylistTrackChange -= OnTrackChange;
             OnPlaylistTrackChange += OnTrackChange;
             _playlistPointer = -1;
             if (_playlistPlayingOrder == PlayingOrder.Shuffle)

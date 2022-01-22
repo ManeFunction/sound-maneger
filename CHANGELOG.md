@@ -1,3 +1,7 @@
+1.1.4:
+    - Fixed an issue that prevent playlist song changing.
+    - Fixed an issue that brake the right playlist order after the second PlayMusic execution.
+
 1.1.3:
     - Fixed broken dependencies by the last commit, upped again to 1.6.0.
 
