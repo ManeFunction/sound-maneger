@@ -1,3 +1,6 @@
+1.1.5:
+    - Fixed an issue caused music change in some cases if you are playing a single track after a playlist.
+
 1.1.4:
     - Fixed an issue that prevent playlist song changing.
     - Fixed an issue that brake the right playlist order after the second PlayMusic execution.

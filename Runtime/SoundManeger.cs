@@ -246,7 +246,7 @@ namespace Mane.SoundManeger
         }
 
 
-        public void PlayMusic(AudioClip clip, float? newTransitionTime = null)
+        private void PlayAudioClip(AudioClip clip)
         {
             if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
                 _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
@@ -255,14 +255,13 @@ namespace Mane.SoundManeger
                 return;
             }
 
-            float musicTransitionTime = newTransitionTime ?? _transitionTime;
             if (_activeFirstMusicSource)
             {
                 _musicSource2.clip = clip;
                 if (!_mode.HasFlag(PlayMode.PlaylistActive))
                     _musicSource2.loop = true;
                 _musicSource2.Play();
-                _music2Snapshot.TransitionTo(musicTransitionTime);
+                _music2Snapshot.TransitionTo(_transitionTime);
                 _activeFirstMusicSource = false;
             }
             else
@@ -271,7 +270,7 @@ namespace Mane.SoundManeger
                 if (!_mode.HasFlag(PlayMode.PlaylistActive))
                     _musicSource1.loop = true;
                 _musicSource1.Play();
-                _music1Snapshot.TransitionTo(musicTransitionTime);
+                _music1Snapshot.TransitionTo(_transitionTime);
                 _activeFirstMusicSource = true;
             }
             
@@ -319,7 +318,7 @@ namespace Mane.SoundManeger
             // single track
             if (playlist.Length == 1)
             {
-                PlayTrack(GetClip(playlist[0]));
+                PlayMusic(GetClip(playlist[0]));
 
                 return;
             }
@@ -343,7 +342,7 @@ namespace Mane.SoundManeger
             // single track
             if (playlist == null || playlist.Length == 0)
             {
-                PlayTrack(GetClip(first));
+                PlayMusic(GetClip(first));
 
                 return;
             }
@@ -353,15 +352,19 @@ namespace Mane.SoundManeger
             pl.AddRange(playlist);
             StartPlaylist(pl);
         }
-
-
-        private void PlayTrack(AudioClip clip)
+        
+        /// <summary>
+        /// Play a single music track.
+        /// Use overload with a strings path input to set up a playlist.
+        /// </summary>
+        public void PlayMusic(AudioClip clip)
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
             _mode &= ~PlayMode.PlaylistActive;
             OnPlaylistTrackChange -= OnTrackChange;
-            PlayMusic(clip);
+            
+            PlayAudioClip(clip);
         }
 
 
@@ -407,7 +410,7 @@ namespace Mane.SoundManeger
                     _playlistPointer = 0;
             }
 
-            PlayMusic(GetClip(_playlist[_playlistPointer]));
+            PlayAudioClip(GetClip(_playlist[_playlistPointer]));
         }
 
 
