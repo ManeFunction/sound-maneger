@@ -1,3 +1,16 @@
+1.1.5:
+    - Fixed an issue caused music change in some cases if you are playing a single track after a playlist.
+
+1.1.4:
+    - Fixed an issue that prevent playlist song changing.
+    - Fixed an issue that brake the right playlist order after the second PlayMusic execution.
+
+1.1.3:
+    - Fixed broken dependencies by the last commit, upped again to 1.6.0.
+
+1.1.2:
+    - Fixed Mane Tools dependencies, updated to the latest at the time (1.5.38).
+
 1.1.1:
     - Added code to access default AudioListener.
 

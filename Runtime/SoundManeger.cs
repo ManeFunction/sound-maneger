@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -72,9 +72,7 @@ namespace Mane.SoundManeger
             get
             {
                 if (_instance == null)
-                {
                     _instance = FindObjectOfType<SoundManeger>();
-                }
 
                 return _instance;
             }
@@ -107,9 +105,7 @@ namespace Mane.SoundManeger
             FillMixerStuff();
 
             if (transform.parent == null)
-            {
                 DontDestroyOnLoad(gameObject);
-            }
         }
 
 
@@ -119,13 +115,12 @@ namespace Mane.SoundManeger
         private void FillMixerStuff()
         {
             if (_mixer == null)
-            {
                 _mixer = Resources.Load<AudioMixer>("AudioMixer");
-            }
 
             if (_mixer == null)
             {
                 Debug.LogWarning("Can't find AudioMixer in the project!");
+                
                 return;
             }
 
@@ -166,13 +161,9 @@ namespace Mane.SoundManeger
             set
             {
                 if (value)
-                {
                     _mode &= ~PlayMode.PlayingMusic;
-                }
                 else
-                {
                     _mode |= PlayMode.PlayingMusic;
-                }
 
                 _muteMusic = value;
                 SetVolume("BgmVolume", value ? 0 : _cachedBgmVolume);
@@ -212,9 +203,7 @@ namespace Mane.SoundManeger
                 _cachedBgmVolume = value;
 
                 if (!MuteMusic)
-                {
                     SetVolume("BgmVolume", value);
-                }
             }
         }
 
@@ -230,9 +219,7 @@ namespace Mane.SoundManeger
                 _cachedSfxVolume = value;
 
                 if (!MuteSfx)
-                {
                     SetVolume("SfxVolume", value);
-                }
             }
         }
 
@@ -249,13 +236,9 @@ namespace Mane.SoundManeger
         private void SetVolume(string key, float value)
         {
             if (value < 0.0f)
-            {
                 value = 0.0f;
-            }
             else if (value > 1.0f)
-            {
                 value = 1.0f;
-            }
 
             value = value * 100.0f - 80.0f;
 
@@ -263,32 +246,35 @@ namespace Mane.SoundManeger
         }
 
 
-        public void PlayMusic(AudioClip clip, float? newTransitionTime = null)
+        private void PlayAudioClip(AudioClip clip)
         {
-            if ((_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource) ||
-                (_musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource))
+            if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
+                _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
             {
                 _activeFirstMusicSource = !_activeFirstMusicSource;
                 return;
             }
 
-            float musicTransitionTime = newTransitionTime ?? (_transitionTime);
             if (_activeFirstMusicSource)
             {
                 _musicSource2.clip = clip;
-                _musicSource2.loop = true;
+                if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    _musicSource2.loop = true;
                 _musicSource2.Play();
-                _music2Snapshot.TransitionTo(musicTransitionTime);
+                _music2Snapshot.TransitionTo(_transitionTime);
                 _activeFirstMusicSource = false;
             }
             else
             {
                 _musicSource1.clip = clip;
-                _musicSource1.loop = true;
+                if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    _musicSource1.loop = true;
                 _musicSource1.Play();
-                _music1Snapshot.TransitionTo(musicTransitionTime);
+                _music1Snapshot.TransitionTo(_transitionTime);
                 _activeFirstMusicSource = true;
             }
+            
+            _mode |= PlayMode.PlayingMusic;
         }
 
 
@@ -297,33 +283,22 @@ namespace Mane.SoundManeger
 
         public void Lowpass(bool enable)
         {
-            if (_lowpass == enable)
-            {
-                return;
-            }
+            if (_lowpass == enable) return;
 
             _lowpass = enable;
             if (_activeFirstMusicSource)
             {
                 if (_lowpass)
-                {
                     _music1LowSnapshot.TransitionTo(_lowpassTime);
-                }
                 else
-                {
                     _music1Snapshot.TransitionTo(_lowpassTime);
-                }
             }
             else
             {
                 if (_lowpass)
-                {
                     _music2LowSnapshot.TransitionTo(_lowpassTime);
-                }
                 else
-                {
                     _music2Snapshot.TransitionTo(_lowpassTime);
-                }
             }
         }
 
@@ -338,15 +313,12 @@ namespace Mane.SoundManeger
         public void PlayMusic(string[] playlist)
         {
             // empty call
-            if (playlist == null || playlist.Length == 0)
-            {
-                return;
-            }
+            if (playlist == null || playlist.Length == 0) return;
 
             // single track
             if (playlist.Length == 1)
             {
-                PlayTrack(GetClip(playlist[0]));
+                PlayMusic(GetClip(playlist[0]));
 
                 return;
             }
@@ -365,51 +337,50 @@ namespace Mane.SoundManeger
         /// </summary>
         public void PlayMusic(string first, params string[] playlist)
         {
-            if (string.IsNullOrEmpty(first))
-            {
-                return;
-            }
+            if (string.IsNullOrEmpty(first)) return;
 
             // single track
             if (playlist == null || playlist.Length == 0)
             {
-                PlayTrack(GetClip(first));
+                PlayMusic(GetClip(first));
 
                 return;
             }
 
             // playlist
-            List<string> pl = new List<string>(playlist.Length + 1) {first};
+            List<string> pl = new List<string>(playlist.Length + 1) { first };
             pl.AddRange(playlist);
             StartPlaylist(pl);
         }
-
-
-        private void PlayTrack(AudioClip clip)
+        
+        /// <summary>
+        /// Play a single music track.
+        /// Use overload with a strings path input to set up a playlist.
+        /// </summary>
+        public void PlayMusic(AudioClip clip)
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
             _mode &= ~PlayMode.PlaylistActive;
             OnPlaylistTrackChange -= OnTrackChange;
-            PlayMusic(clip);
+            
+            PlayAudioClip(clip);
         }
 
 
         private void StartPlaylist(List<string> playlist)
         {
-            this._playlist = playlist;
+            _playlist = playlist;
 
             _musicSource1.loop = false;
             _musicSource2.loop = false;
             _mode |= PlayMode.PlaylistActive;
+            // safe way to exclude double subscription
+            OnPlaylistTrackChange -= OnTrackChange;
             OnPlaylistTrackChange += OnTrackChange;
             _playlistPointer = -1;
             if (_playlistPlayingOrder == PlayingOrder.Shuffle)
-            {
-                // Check out my neat extensions for Unity classes or just shuffle the array manually
-                // https://github.com/ManeFunction/unity-mane
                 _playlist.Shuffle();
-            }
 
             OnTrackChange();
         }
@@ -436,12 +407,10 @@ namespace Mane.SoundManeger
             {
                 _playlistPointer++;
                 if (_playlistPointer >= _playlist.Count)
-                {
                     _playlistPointer = 0;
-                }
             }
 
-            PlayMusic(GetClip(_playlist[_playlistPointer]));
+            PlayAudioClip(GetClip(_playlist[_playlistPointer]));
         }
 
 
@@ -456,30 +425,26 @@ namespace Mane.SoundManeger
 
         public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None)
         {
-            if (clip == null)
+            if (clip == null) return;
+
+            if (!IsSoundPlayingAvailable(clip)) return;
+            
+            // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
+            StartCoroutine(SfxCache(clip));
+
+            switch (duck)
             {
-                return;
-            }
+                case DuckType.MusicOnly:
+                    _duckBgmSource.PlayOneShot(clip);
+                    break;
 
-            if (IsSoundPlayingAvailable(clip))
-            {
-                // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
-                StartCoroutine(SfxCache(clip));
+                case DuckType.AllSources:
+                    _duckAllSource.PlayOneShot(clip);
+                    break;
 
-                switch (duck)
-                {
-                    case DuckType.MusicOnly:
-                        _duckBgmSource.PlayOneShot(clip);
-                        break;
-
-                    case DuckType.AllSources:
-                        _duckAllSource.PlayOneShot(clip);
-                        break;
-
-                    default:
-                        _sfxSource.PlayOneShot(clip);
-                        break;
-                }
+                default:
+                    _sfxSource.PlayOneShot(clip);
+                    break;
             }
         }
 
