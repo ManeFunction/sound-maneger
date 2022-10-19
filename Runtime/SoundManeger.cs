@@ -52,11 +52,7 @@ namespace Mane.SoundManeger
         [SerializeField] private float _transitionTime = 1.5f;
         [SerializeField] private float _lowpassTime = 0.4f;
         [SerializeField] private PlayingOrder _playlistPlayingOrder = PlayingOrder.Default;
-
-        [Header("SFX count limitations")]
-        [SerializeField] private List<string> _limitedSfxs = new List<string>();
         [SerializeField] private int _maxSameSoundsCount = 3;
-        [SerializeField] private float _delayBetweenSameSounds = 0.3f;
 
         
         private AudioMixerSnapshot _music1Snapshot;
@@ -507,34 +503,35 @@ namespace Mane.SoundManeger
             string clipName = audioClip.name;
             float currentTime = Time.time;
 
-            if (_limitedSfxs.Contains(clipName))
-            {
-                return true;
-            }
-
             bool result = true;
             
             if (!_limitedSfxTimings.TryGetValue(clipName, out List<float> times))
             {
-                _limitedSfxTimings.Add(clipName, new List<float> { currentTime });
+                // first list element contains rotation index
+                _limitedSfxTimings.Add(clipName, new List<float> { 1, currentTime });
             }
             else
             {
-                int timesCount = times.Count;
-                if (timesCount < _maxSameSoundsCount)
+                int timesCount = times.Count - 1;
+                if (timesCount <= _maxSameSoundsCount)
                 {
                     times.Add(currentTime);
                 }
                 else
                 {
-                    int index = times.Count - _maxSameSoundsCount;
-                    if (currentTime - times[index] < _delayBetweenSameSounds)
+                    int index = (int)times[0];
+                    if (currentTime - times[index] < audioClip.length)
                     {
                         result = false;
                     }
                     else
                     {
-                        times.Add(currentTime);
+                        times[index] = currentTime;
+                        
+                        index++;
+                        if (index >= timesCount)
+                            index = 1;
+                        times[0] = index;
                     }
                 }
             }

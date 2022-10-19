@@ -1,3 +1,6 @@
+1.2.0:
+    - Improved same SFX suppression. Now it depends on the SFX length, and you control how many SFX you allow simultaneously.
+
 1.1.5:
     - Fixed an issue caused music change in some cases if you are playing a single track after a playlist.
 
