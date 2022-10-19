@@ -67,9 +67,7 @@ MonoBehaviour:
   _transitionTime: 1.5
   _lowpassTime: 0.4
   _playlistPlayingOrder: 0
-  _limitedSfxs: []
   _maxSameSoundsCount: 3
-  _delayBetweenSameSounds: 0.3
 --- !u!82 &82330094734429888
 AudioSource:
   m_ObjectHideFlags: 0

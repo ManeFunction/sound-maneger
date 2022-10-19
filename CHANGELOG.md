@@ -1,3 +1,6 @@
+1.2.1:
+    - Reserealize main prefab to prevent it's constant changing in target projects.
+
 1.2.0:
     - Improved same SFX suppression. Now it depends on the SFX length, and you control how many SFX you allow simultaneously.
 
