@@ -300,11 +300,7 @@ namespace Mane.SoundManeger
 
 
         /// <summary>
-        /// Play a playlist.
-        /// If you need to play it Shuffled set PlaylistPlayingOrder first.
-        /// And you can't return order from Shuffle to Default without restarting PlayMusic().
-        /// Random order, however, can be chose and returned back to Default 'on fly'.
-        /// Random behavior guarantee NOT to play the same track twice on a row either!
+        /// Start a playlist.
         /// </summary>
         public void PlayMusic(string[] playlist)
         {
@@ -323,13 +319,23 @@ namespace Mane.SoundManeger
             StartPlaylist(new List<string>(playlist));
         }
 
+        /// <summary>
+        /// Start a playlist.
+        /// Default order keeps the order as is.
+        /// Random order is completely randomized.
+        /// Shuffle shuffles the list after every cycle.
+        /// Both shuffle and random are guarantee NOT to play the same track twice in a row.
+        /// </summary>
+        public void PlayMusic(PlayingOrder playingOrder, string[] playlist)
+        {
+            _playlistPlayingOrder = playingOrder;
+            
+            PlayMusic(playlist);
+        }
+
 
         /// <summary>
-        /// Play a track or a playlist.
-        /// If you need to play it Shuffled set PlaylistPlayingOrder first.
-        /// And you can't return order from Shuffle to Default without restarting PlayMusic().
-        /// Random order, however, can be chose and returned back to Default 'on fly'.
-        /// Random behavior guarantee NOT to play the same track twice on a row either!
+        /// Start a track or a playlist.
         /// </summary>
         public void PlayMusic(string first, params string[] playlist)
         {
@@ -348,6 +354,21 @@ namespace Mane.SoundManeger
             pl.AddRange(playlist);
             StartPlaylist(pl);
         }
+        
+        /// <summary>
+        /// Start a track or a playlist.
+        /// Default order keeps the order as is.
+        /// Random order is completely randomized.
+        /// Shuffle shuffles the list after every cycle.
+        /// Both shuffle and random are guarantee NOT to play the same track twice in a row.
+        /// </summary>
+        public void PlayMusic(PlayingOrder playingOrder, string first, params string[] playlist)
+        {
+            _playlistPlayingOrder = playingOrder;
+            
+            PlayMusic(first, playlist);
+        }
+
         
         /// <summary>
         /// Play a single music track.
@@ -403,7 +424,17 @@ namespace Mane.SoundManeger
             {
                 _playlistPointer++;
                 if (_playlistPointer >= _playlist.Count)
+                {
                     _playlistPointer = 0;
+                    if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
+                    {
+                        var lastTrack = _playlist.Last();
+                        do
+                        {
+                            _playlist.Shuffle();
+                        } while (_playlist.First() == lastTrack);
+                    }
+                }
             }
 
             PlayAudioClip(GetClip(_playlist[_playlistPointer]));

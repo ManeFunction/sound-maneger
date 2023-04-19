@@ -1,3 +1,7 @@
+1.3.0:
+    - Shuffled mode now shuffles the playlist after each cycle.
+    - Added PlayMusic() overloads that allow to set a playing order.
+
 1.2.1:
     - Reserealize main prefab to prevent it's constant changing in target projects.
 
