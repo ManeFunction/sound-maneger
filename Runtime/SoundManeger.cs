@@ -10,7 +10,7 @@ namespace Mane.SoundManeger
 {
     public delegate void TrackChangeHandler();
 
-    [AddComponentMenu("Sound Manager")]
+    [AddComponentMenu("Audio/Sound Manager")]
     [DisallowMultipleComponent]
     public class SoundManeger : MonoBehaviour
     {

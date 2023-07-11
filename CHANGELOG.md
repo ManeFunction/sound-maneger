@@ -1,3 +1,6 @@
+1.3.1:
+    - Sound Maneger component was placed under the Audio menu.
+
 1.3.0:
     - Shuffled mode now shuffles the playlist after each cycle.
     - Added PlayMusic() overloads that allow to set a playing order.
