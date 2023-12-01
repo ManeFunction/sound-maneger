@@ -12,7 +12,7 @@ namespace Mane.SoundManeger
 
     [AddComponentMenu("Audio/Sound Manager")]
     [DisallowMultipleComponent]
-    public class SoundManeger : MonoBehaviour
+    public class SoundManeger : MonoSingleton<SoundManeger>
     {
         public enum PlayingOrder
         {
@@ -61,20 +61,6 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music2LowSnapshot;
 
 
-        private static SoundManeger _instance;
-
-        public static SoundManeger Instance
-        {
-            get
-            {
-                if (_instance == null)
-                    _instance = FindObjectOfType<SoundManeger>();
-
-                return _instance;
-            }
-        }
-
-
         public event TrackChangeHandler OnPlaylistTrackChange;
 
 
@@ -96,8 +82,10 @@ namespace Mane.SoundManeger
         private readonly Dictionary<string, List<float>> _limitedSfxTimings = new Dictionary<string, List<float>>();
 
 
-        private void Awake()
+        protected override void Awake()
         {
+            base.Awake();
+            
             FillMixerStuff();
 
             if (transform.parent == null)

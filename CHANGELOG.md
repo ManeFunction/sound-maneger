@@ -1,3 +1,6 @@
+1.3.2:
+    - Updated Mane Tools dependency to 1.10.22.
+
 1.3.1:
     - Sound Maneger component was placed under the Audio menu.
 
