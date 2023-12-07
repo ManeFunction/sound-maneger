@@ -54,6 +54,12 @@ namespace Mane.SoundManeger
                     yield return new WaitForSecondsRealtime(_repeatDelay);
                 }
             }
+
+            if (owner == null)
+            {
+                callback?.Invoke(null);
+                yield break;
+            }
             
             var links = owner.GetComponents<AddressablesMusicLink>();
             AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);

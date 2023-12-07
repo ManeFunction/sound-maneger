@@ -62,6 +62,8 @@ namespace Mane.SoundManeger
         private IMusicLoader _musicLoader;
         private bool _isMusicLoading;
 
+        private Coroutine _transitionAwaiter;
+
         public event Action PlaylistTrackChange;
 
 
@@ -598,6 +600,9 @@ namespace Mane.SoundManeger
                 _musicSource2.Play();
                 _music2Snapshot.TransitionTo(_transitionTime);
                 _activeFirstMusicSource = false;
+                if (_transitionAwaiter != null)
+                    StopCoroutine(_transitionAwaiter);
+                _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource1, _transitionTime));
             }
             else
             {
@@ -607,9 +612,20 @@ namespace Mane.SoundManeger
                 _musicSource1.Play();
                 _music1Snapshot.TransitionTo(_transitionTime);
                 _activeFirstMusicSource = true;
+                if (_transitionAwaiter != null)
+                    StopCoroutine(_transitionAwaiter);
+                _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource2, _transitionTime));
             }
             
             _mode |= PlayMode.PlayingMusic;
+        }
+
+        private IEnumerator StopMusicSource(AudioSource source, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            
+            source.Stop();
+            _transitionAwaiter = null;
         }
         
         private async Task<AudioClip> GetClip(MonoBehaviour requester, string path, bool isMusic)
