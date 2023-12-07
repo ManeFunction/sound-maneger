@@ -1,6 +1,7 @@
 #if UNITY_ADDRESSABLES
 using System;
 using System.Collections;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -23,7 +24,7 @@ namespace Mane.SoundManeger
             owner ??= SoundManeger.Instance;
             
             AudioClip result = null;
-            Coroutine coroutine = owner.StartCoroutine(GetMusicCoroutine(path, OnClipLoaded));
+            Coroutine coroutine = owner.StartCoroutine(GetMusicCoroutine(owner, path, OnClipLoaded));
             while (coroutine != null)
                 await Task.Yield();
             return result;
@@ -36,7 +37,7 @@ namespace Mane.SoundManeger
             }
         }
         
-        private IEnumerator GetMusicCoroutine(string path, Action<AudioClip> callback)
+        private IEnumerator GetMusicCoroutine(MonoBehaviour owner, string path, Action<AudioClip> callback)
         {
             AsyncOperationHandle<AudioClip> handle = default;
             if (!handle.IsValid())
@@ -54,6 +55,10 @@ namespace Mane.SoundManeger
                 }
             }
             
+            var links = owner.GetComponents<AddressablesMusicLink>();
+            AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
+            link ??= owner.gameObject.AddComponent<AddressablesMusicLink>();
+            link.Bind(handle);
             callback?.Invoke(handle.Result);
         }
     }

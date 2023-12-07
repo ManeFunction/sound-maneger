@@ -1,3 +1,6 @@
+1.4.1:
+    - Added AddressableMusicLink component to allow assets releasing on owner object destroy.
+
 1.4.0:
     - All music loading is now async.
     - Added ResourcesMusicLoader to load music from Resources folder.
