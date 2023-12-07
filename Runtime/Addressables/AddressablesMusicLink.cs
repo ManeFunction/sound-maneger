@@ -1,3 +1,4 @@
+#if UNITY_ADDRESSABLES
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -25,3 +26,4 @@ namespace Mane.SoundManeger
         private void OnDestroy() => Release();
     }
 }
+#endif
