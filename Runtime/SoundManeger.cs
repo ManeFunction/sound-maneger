@@ -496,6 +496,7 @@ namespace Mane.SoundManeger
             if (_isMusicLoading) return;
             
             PlayMusicClip(await GetClip(_playlistOwner, _playlist[_playlistPointer], true));
+            PrepareNextTrack();
         }
 
         private void ClearPlaylist()
