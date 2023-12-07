@@ -2,14 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Mane.Extensions;
 using UnityEngine;
 using UnityEngine.Audio;
 
 namespace Mane.SoundManeger
 {
-    public delegate void TrackChangeHandler();
-
     [AddComponentMenu("Audio/Sound Manager")]
     [DisallowMultipleComponent]
     public class SoundManeger : MonoSingleton<SoundManeger>
@@ -60,16 +59,21 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music1LowSnapshot;
         private AudioMixerSnapshot _music2LowSnapshot;
 
+        private IMusicLoader _musicLoader;
+        private bool _isMusicLoading;
 
-        public event TrackChangeHandler OnPlaylistTrackChange;
+        public event Action PlaylistTrackChange;
 
 
         private List<string> _playlist;
         private int _playlistPointer;
+        private MonoBehaviour _playlistOwner; 
         private PlayMode _mode;
+        private AudioClip _nextPlaylistTrack;
 
         private bool _activeFirstMusicSource;
         private bool _lowpass;
+        private bool _manualPlaylistMode;
 
         private bool _muteMusic;
         private bool _muteSfx;
@@ -85,6 +89,8 @@ namespace Mane.SoundManeger
         protected override void Awake()
         {
             base.Awake();
+
+            _musicLoader = new ResourcesMusicLoader();
             
             FillMixerStuff();
 
@@ -94,8 +100,8 @@ namespace Mane.SoundManeger
 
 
         private void Reset() => FillMixerStuff();
-
-
+        
+        
         private void FillMixerStuff()
         {
             if (_mixer == null)
@@ -132,13 +138,23 @@ namespace Mane.SoundManeger
             _mixer.FindMatchingGroups("Master/SFX/FadeAll").First();
 
 
+        /// <summary>
+        /// Transition time between music tracks (applied only for manual track switching, not for a playlist).
+        /// </summary>
         public float TransitionTime
         {
             get => _transitionTime;
             set => _transitionTime = value;
         }
 
-
+        /// <summary>
+        /// Indicates that music is playing.
+        /// </summary>
+        public bool IsMusicPlaying => _musicSource1.isPlaying || _musicSource2.isPlaying;
+        
+        /// <summary>
+        /// Mute all music.
+        /// </summary>
         public bool MuteMusic
         {
             get => _muteMusic;
@@ -153,8 +169,10 @@ namespace Mane.SoundManeger
                 SetVolume("BgmVolume", value ? 0 : _cachedBgmVolume);
             }
         }
-
-
+        
+        /// <summary>
+        /// Mute all sound effects.
+        /// </summary>
         public bool MuteSfx
         {
             get => _muteSfx;
@@ -164,8 +182,7 @@ namespace Mane.SoundManeger
                 SetVolume("SfxVolume", value ? 0 : _cachedSfxVolume);
             }
         }
-
-
+        
         /// <summary>
         /// Set the volume between 0f and 1f, what depends on range from -80 to 20 in mixer.
         /// </summary>
@@ -174,7 +191,6 @@ namespace Mane.SoundManeger
             get => GetVolume("MasterVolume");
             set => SetVolume("MasterVolume", value);
         }
-
 
         /// <summary>
         /// Set the volume between 0f and 1f, what depends on range from -80 to 20 in mixer.
@@ -190,8 +206,7 @@ namespace Mane.SoundManeger
                     SetVolume("BgmVolume", value);
             }
         }
-
-
+        
         /// <summary>
         /// Set the volume between 0f and 1f, what depends on range from -80 to 20 in mixer.
         /// </summary>
@@ -206,8 +221,7 @@ namespace Mane.SoundManeger
                     SetVolume("SfxVolume", value);
             }
         }
-
-
+        
         private float GetVolume(string key)
         {
             _mixer.GetFloat(key, out float value);
@@ -215,7 +229,6 @@ namespace Mane.SoundManeger
 
             return value;
         }
-
 
         private void SetVolume(string key, float value)
         {
@@ -228,43 +241,25 @@ namespace Mane.SoundManeger
 
             _mixer.SetFloat(key, value);
         }
-
-
-        private void PlayAudioClip(AudioClip clip)
+        
+        
+        /// <summary>
+        /// Set music loader. Use for your own implementation or create a standard AddressableMusicLoader.
+        /// ResourcesMusicLoader is used by default.
+        /// </summary>
+        /// <param name="musicLoader">Music loader to use.</param>
+        public void SetMusicLoader(IMusicLoader musicLoader)
         {
-            if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
-                _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
-            {
-                _activeFirstMusicSource = !_activeFirstMusicSource;
-                return;
-            }
-
-            if (_activeFirstMusicSource)
-            {
-                _musicSource2.clip = clip;
-                if (!_mode.HasFlag(PlayMode.PlaylistActive))
-                    _musicSource2.loop = true;
-                _musicSource2.Play();
-                _music2Snapshot.TransitionTo(_transitionTime);
-                _activeFirstMusicSource = false;
-            }
-            else
-            {
-                _musicSource1.clip = clip;
-                if (!_mode.HasFlag(PlayMode.PlaylistActive))
-                    _musicSource1.loop = true;
-                _musicSource1.Play();
-                _music1Snapshot.TransitionTo(_transitionTime);
-                _activeFirstMusicSource = true;
-            }
+            if (musicLoader == null) return;
             
-            _mode |= PlayMode.PlayingMusic;
+            _musicLoader = musicLoader;
         }
 
 
-        public bool IsMusicPlaying => _musicSource1.isPlaying || _musicSource2.isPlaying;
-
-
+        /// <summary>
+        /// Enable or disable lowpass filter on music.
+        /// </summary>
+        /// <param name="enable">Enable or disable.</param>
         public void Lowpass(bool enable)
         {
             if (_lowpass == enable) return;
@@ -286,11 +281,66 @@ namespace Mane.SoundManeger
             }
         }
 
+        
+        /// <summary>
+        /// Play a single music track.
+        /// </summary>
+        /// <param name="clip">Track to play.</param>
+        public void PlayMusic(AudioClip clip)
+        {
+            _musicSource1.loop = true;
+            _musicSource2.loop = true;
+            _mode &= ~PlayMode.PlaylistActive;
+            PlaylistTrackChange -= OnTrackChange;
+            ClearPlaylist();
+            
+            PlayMusicClip(clip);
+        }
+        
+        /// <summary>
+        /// Load and play a single music track.
+        /// </summary>
+        /// <param name="owner">Track loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="path">Path to the track.</param>
+        public async void PlayMusic(MonoBehaviour owner, string path) => 
+            PlayMusic(await GetClip(owner, path, true));
+        
+        /// <summary>
+        /// Play a playlist.
+        /// </summary>
+        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
+        /// <param name="first">First track to play.</param>
+        /// <param name="playlist">Playlist to play.</param>
+        public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string first, params string[] playlist)
+        {
+            if (string.IsNullOrEmpty(first)) return;
+
+            // single track
+            if (playlist == null || playlist.Length == 0)
+            {
+                PlayMusic(await GetClip(owner, first, true));
+
+                return;
+            }
+
+            // playlist
+            List<string> pl = new List<string>(playlist);
+            if (firstTrackIsIntro)
+                PlayMusic(await GetClip(owner, first, true));
+            else
+                pl.Insert(0, first);
+
+            StartPlaylist(owner, pl, firstTrackIsIntro);
+        }
 
         /// <summary>
-        /// Start a playlist.
+        /// Play a playlist.
         /// </summary>
-        public void PlayMusic(string[] playlist)
+        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
+        /// <param name="playlist">Playlist to play.</param>
+        public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string[] playlist)
         {
             // empty call
             if (playlist == null || playlist.Length == 0) return;
@@ -298,100 +348,98 @@ namespace Mane.SoundManeger
             // single track
             if (playlist.Length == 1)
             {
-                PlayMusic(GetClip(playlist[0]));
+                PlayMusic(await GetClip(owner, playlist[0], true));
 
                 return;
             }
-
+            
             // playlist
-            StartPlaylist(new List<string>(playlist));
+            List<string> pl = new List<string>(playlist);
+            if (firstTrackIsIntro)
+            {
+                PlayMusic(await GetClip(owner, pl[0], true));
+                pl.RemoveAt(0);
+            }
+
+            StartPlaylist(owner, pl, firstTrackIsIntro);
+        }
+        
+        /// <summary>
+        /// Play a playlist.
+        /// </summary>
+        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="playingOrder">Order of playing tracks. Default order keeps the order as is. Random order is completely randomized. Shuffle shuffles the list after every cycle. Both shuffle and random are guarantee NOT to play the same track twice in a row.</param>
+        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
+        /// <param name="first">First track to play.</param>
+        /// <param name="playlist">Playlist to play.</param>
+        public void PlayMusic(MonoBehaviour owner, PlayingOrder playingOrder,
+            bool firstTrackIsIntro, string first, params string[] playlist)
+        {
+            _playlistPlayingOrder = playingOrder;
+            
+            PlayMusic(owner, firstTrackIsIntro, first, playlist);
         }
 
         /// <summary>
         /// Start a playlist.
-        /// Default order keeps the order as is.
-        /// Random order is completely randomized.
-        /// Shuffle shuffles the list after every cycle.
-        /// Both shuffle and random are guarantee NOT to play the same track twice in a row.
         /// </summary>
-        public void PlayMusic(PlayingOrder playingOrder, string[] playlist)
+        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="playingOrder">Order of playing tracks. Default order keeps the order as is. Random order is completely randomized. Shuffle shuffles the list after every cycle. Both shuffle and random are guarantee NOT to play the same track twice in a row.</param>
+        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
+        /// <param name="playlist">Playlist to play.</param>
+        public void PlayMusic(MonoBehaviour owner, PlayingOrder playingOrder, bool firstTrackIsIntro, string[] playlist)
         {
             _playlistPlayingOrder = playingOrder;
             
-            PlayMusic(playlist);
-        }
-
-
-        /// <summary>
-        /// Start a track or a playlist.
-        /// </summary>
-        public void PlayMusic(string first, params string[] playlist)
-        {
-            if (string.IsNullOrEmpty(first)) return;
-
-            // single track
-            if (playlist == null || playlist.Length == 0)
-            {
-                PlayMusic(GetClip(first));
-
-                return;
-            }
-
-            // playlist
-            List<string> pl = new List<string>(playlist.Length + 1) { first };
-            pl.AddRange(playlist);
-            StartPlaylist(pl);
+            PlayMusic(owner, firstTrackIsIntro, playlist);
         }
         
         /// <summary>
-        /// Start a track or a playlist.
-        /// Default order keeps the order as is.
-        /// Random order is completely randomized.
-        /// Shuffle shuffles the list after every cycle.
-        /// Both shuffle and random are guarantee NOT to play the same track twice in a row.
+        /// Stop playing music.
         /// </summary>
-        public void PlayMusic(PlayingOrder playingOrder, string first, params string[] playlist)
+        public void StopMusic()
         {
-            _playlistPlayingOrder = playingOrder;
-            
-            PlayMusic(first, playlist);
-        }
-
-        
-        /// <summary>
-        /// Play a single music track.
-        /// Use overload with a strings path input to set up a playlist.
-        /// </summary>
-        public void PlayMusic(AudioClip clip)
-        {
-            _musicSource1.loop = true;
-            _musicSource2.loop = true;
-            _mode &= ~PlayMode.PlaylistActive;
-            OnPlaylistTrackChange -= OnTrackChange;
-            
-            PlayAudioClip(clip);
+            _mode &= PlayMode.PlayingMusic;
+            PlaylistTrackChange -= OnTrackChange;
+            _musicSource1.Stop();
+            _musicSource2.Stop();
+            ClearPlaylist();
         }
 
 
-        private void StartPlaylist(List<string> playlist)
+        private void StartPlaylist(MonoBehaviour owner, List<string> playlist, bool startAfterCurrentTrack = false)
         {
             _playlist = playlist;
+            _playlistOwner = owner;
 
             _musicSource1.loop = false;
             _musicSource2.loop = false;
             _mode |= PlayMode.PlaylistActive;
             // safe way to exclude double subscription
-            OnPlaylistTrackChange -= OnTrackChange;
-            OnPlaylistTrackChange += OnTrackChange;
-            _playlistPointer = -1;
-            if (_playlistPlayingOrder == PlayingOrder.Shuffle)
-                _playlist.Shuffle();
+            PlaylistTrackChange -= OnTrackChange;
+            PlaylistTrackChange += OnTrackChange;
+            switch (_playlistPlayingOrder)
+            {
+                case PlayingOrder.Default:
+                    _playlistPointer = 0;
+                    break;
+                
+                case PlayingOrder.Shuffle: 
+                    _playlist.Shuffle();
+                    break;
+                
+                case PlayingOrder.Random:
+                    _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
+                    break;
+            }
 
-            OnTrackChange();
+            if (startAfterCurrentTrack)
+                CacheNextTrack();
+            else
+                OnTrackChange();
         }
 
-
-        private void OnTrackChange()
+        private void PrepareNextTrack()
         {
             if (_playlistPlayingOrder == PlayingOrder.Random)
             {
@@ -425,19 +473,40 @@ namespace Mane.SoundManeger
                 }
             }
 
-            PlayAudioClip(GetClip(_playlist[_playlistPointer]));
+            CacheNextTrack();
         }
+        
+        private async void CacheNextTrack() =>
+            _nextPlaylistTrack = await GetClip(_playlistOwner, _playlist[_playlistPointer], true);
 
-
-        public void StopMusic()
+        private async void OnTrackChange()
         {
-            _mode &= PlayMode.PlayingMusic;
-            OnPlaylistTrackChange -= OnTrackChange;
-            _musicSource1.Stop();
-            _musicSource2.Stop();
+            if (_nextPlaylistTrack)
+            {
+                PlayMusicClip(_nextPlaylistTrack);
+                _nextPlaylistTrack = null;
+                PrepareNextTrack();
+                return;
+            }
+
+            if (_isMusicLoading) return;
+            
+            PlayMusicClip(await GetClip(_playlistOwner, _playlist[_playlistPointer], true));
+        }
+
+        private void ClearPlaylist()
+        {
+            _playlist = null;
+            _playlistOwner = null;
+            _nextPlaylistTrack = null;
         }
 
 
+        /// <summary>
+        /// Play a sound effect.
+        /// </summary>
+        /// <param name="clip">Sound effect to play.</param>
+        /// <param name="duck">Ducking type.</param>
         public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None)
         {
             if (clip == null) return;
@@ -462,11 +531,19 @@ namespace Mane.SoundManeger
                     break;
             }
         }
+        
+        /// <summary>
+        /// Load and play a sound effect.
+        /// </summary>
+        /// <param name="owner">Sound effect loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="path">Path to the sound effect.</param>
+        /// <param name="duck">Ducking type.</param>
+        public async void PlaySfx(MonoBehaviour owner, string path, DuckType duck = DuckType.None) => 
+            PlaySfx(await GetClip(owner, path, false), duck);
 
-
-        public void PlaySfx(string path, DuckType duck = DuckType.None) => PlaySfx(GetClip(path), duck);
-
-
+        /// <summary>
+        /// Stop all sound effects.
+        /// </summary>
         public void StopSfx()
         {
             _sfxSource.Stop();
@@ -475,38 +552,86 @@ namespace Mane.SoundManeger
         }
 
 
+        /// <summary>
+        /// Play a voice. Voice is played on the same source as sfx, but fades out music automatically, based on voice volume.
+        /// </summary>
+        /// <param name="clip">Voice clip to play.</param>
+        /// <param name="delay">Delay before playing.</param>
         public void PlayVoice(AudioClip clip, float delay = 0)
         {
             _duckBgmSource.clip = clip;
             if (delay > 0)
-            {
                 _duckBgmSource.PlayDelayed(delay);
+            else
+                _duckBgmSource.Play();
+        }
+        
+        /// <summary>
+        /// Load and play a voice. Voice is played on the same source as sfx, but fades out music automatically, based on voice volume.
+        /// </summary>
+        /// <param name="owner">Voice loading owner. If null, SoundManeger.Instance will be used.</param>
+        /// <param name="path">Path to the voice clip.</param>
+        public async void PlayVoice(MonoBehaviour owner, string path) => PlayVoice(await GetClip(owner, path, false));
+        
+        /// <summary>
+        /// Stop playing voice.
+        /// </summary>
+        public void StopVoice() => _duckBgmSource.Stop();
+
+        
+        private void PlayMusicClip(AudioClip clip)
+        {
+            if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
+                _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
+            {
+                _activeFirstMusicSource = !_activeFirstMusicSource;
+                return;
+            }
+
+            if (_activeFirstMusicSource)
+            {
+                _musicSource2.clip = clip;
+                if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    _musicSource2.loop = true;
+                _musicSource2.Play();
+                _music2Snapshot.TransitionTo(_transitionTime);
+                _activeFirstMusicSource = false;
             }
             else
             {
-                _duckBgmSource.Play();
+                _musicSource1.clip = clip;
+                if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    _musicSource1.loop = true;
+                _musicSource1.Play();
+                _music1Snapshot.TransitionTo(_transitionTime);
+                _activeFirstMusicSource = true;
             }
+            
+            _mode |= PlayMode.PlayingMusic;
         }
-
-
-        public void PlayVoice(string path) => PlayVoice(GetClip(path));
-
-
-        public void StopVoice() => _duckBgmSource.Stop();
-
-
-        private static AudioClip GetClip(string path) => Resources.Load<AudioClip>(path);
-
+        
+        private async Task<AudioClip> GetClip(MonoBehaviour requester, string path, bool isMusic)
+        {
+            if (isMusic)
+                _isMusicLoading = true;
+            
+            var task = _musicLoader.GetMusicAsync(requester, path);
+            await task;
+            
+            if (isMusic)
+                _isMusicLoading = false;
+            
+            return task.Result;
+        }
 
         private void Update()
         {
-            if (_mode == PlayMode.NeedMusicSwitch && !IsMusicPlaying)
+            if (_mode == PlayMode.NeedMusicSwitch && !IsMusicPlaying && !_isMusicLoading)
             {
-                OnPlaylistTrackChange?.Invoke();
+                PlaylistTrackChange?.Invoke();
             }
         }
-
-
+        
         private IEnumerator SfxCache(AudioClip clip)
         {
             _activeSfx.Add(clip);
@@ -515,7 +640,6 @@ namespace Mane.SoundManeger
 
             _activeSfx.Remove(clip);
         }
-
 
         private bool IsSoundPlayingAvailable(AudioClip audioClip)
         {

@@ -1,3 +1,12 @@
+1.4.0:
+    - All music loading is now async.
+    - Added ResourcesMusicLoader to load music from Resources folder.
+    - Added AddressablesMusicLoader to load music from Addressables.
+    - Added IMusicLoader interface to allow custom music loading.
+    - Added feature to preload next music track when using playlist.
+    - Added feature to start playlist with an opening track that play only once.
+    - Added a lot of documentation summary notes.
+
 1.3.2:
     - Updated Mane Tools dependency to 1.10.22.
 
