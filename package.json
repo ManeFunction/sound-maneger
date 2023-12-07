@@ -1,6 +1,6 @@
 {
   "name": "com.manefunction.sound-maneger",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "displayName": "Sound Maneger",
   "description": "Just a neat sound manager for Unity. Have separated channels, playlists, ducking and some other amazing features.",
   "unity": "2019.1",

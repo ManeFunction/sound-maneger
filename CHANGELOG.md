@@ -1,4 +1,4 @@
-1.4.3:
+1.4.4:
     - Added AddressableMusicLink component to allow assets releasing on owner object destroy.
     - Fixed some issues with new playlist modes.
 
