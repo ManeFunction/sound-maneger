@@ -411,6 +411,7 @@ namespace Mane.SoundManeger
         {
             _playlist = playlist;
             _playlistOwner = owner;
+            _nextPlaylistTrack = null;
 
             _musicSource1.loop = false;
             _musicSource2.loop = false;
@@ -425,6 +426,7 @@ namespace Mane.SoundManeger
                     break;
                 
                 case PlayingOrder.Shuffle: 
+                    _playlistPointer = 0;
                     _playlist.Shuffle();
                     break;
                 
