@@ -21,7 +21,7 @@ namespace Mane.SoundManeger
 
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path)
         {
-            owner ??= SoundManeger.Instance;
+            if (!owner) owner = SoundManeger.Instance;
             
             AudioClip result = null;
             Coroutine coroutine = owner.StartCoroutine(GetMusicCoroutine(owner, path, OnClipLoaded));
@@ -55,7 +55,7 @@ namespace Mane.SoundManeger
                 }
             }
 
-            if (owner == null)
+            if (!owner)
             {
                 callback?.Invoke(null);
                 yield break;
@@ -63,7 +63,7 @@ namespace Mane.SoundManeger
             
             var links = owner.GetComponents<AddressablesMusicLink>();
             AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
-            link ??= owner.gameObject.AddComponent<AddressablesMusicLink>();
+            if (!link) link = owner.gameObject.AddComponent<AddressablesMusicLink>();
             link.Bind(handle);
             callback?.Invoke(handle.Result);
         }
