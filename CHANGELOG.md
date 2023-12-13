@@ -1,3 +1,6 @@
+1.4.7:
+    - Do not try to load music via empty string anymore. 
+
 1.4.5:
     - Added AddressableMusicLink component to allow assets releasing on owner object destroy.
     - Fixed some issues with new playlist modes.
