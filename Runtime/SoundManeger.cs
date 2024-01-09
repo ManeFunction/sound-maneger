@@ -623,7 +623,7 @@ namespace Mane.SoundManeger
 
         private IEnumerator StopMusicSource(AudioSource source, float delay)
         {
-            yield return new WaitForSeconds(delay);
+            yield return new WaitForSecondsRealtime(delay);
             
             source.Stop();
             _transitionAwaiter = null;
@@ -655,7 +655,7 @@ namespace Mane.SoundManeger
         {
             _activeSfx.Add(clip);
 
-            yield return new WaitForSeconds(clip.length);
+            yield return new WaitForSecondsRealtime(clip.length);
 
             _activeSfx.Remove(clip);
         }

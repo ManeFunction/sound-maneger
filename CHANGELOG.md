@@ -1,3 +1,6 @@
+1.4.8:
+    - Replaced WaitForSeconds to WaitForSecondsRealtime for proper work with game pause and other time magic.
+
 1.4.7:
     - Do not try to load music via empty string anymore. 
 
