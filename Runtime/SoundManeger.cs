@@ -663,7 +663,7 @@ namespace Mane.SoundManeger
         private bool IsSoundPlayingAvailable(AudioClip audioClip)
         {
             string clipName = audioClip.name;
-            float currentTime = Time.time;
+            float currentTime = Time.unscaledTime;
 
             bool result = true;
             

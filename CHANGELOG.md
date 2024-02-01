@@ -1,3 +1,6 @@
+1.4.9:
+    - Additional fix for game pause and SFX playing.
+
 1.4.8:
     - Replaced WaitForSeconds to WaitForSecondsRealtime for proper work with game pause and other time magic.
 
