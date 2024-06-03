@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Mane.Extensions;
 using UnityEngine;
@@ -60,7 +61,8 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music2LowSnapshot;
 
         private IMusicLoader _musicLoader;
-        private bool _isMusicLoading;
+        private volatile bool _isMusicLoading;
+        private UnityCancellationTokenSource _unityCancellationSource;
 
         private Coroutine _transitionAwaiter;
 
@@ -406,6 +408,10 @@ namespace Mane.SoundManeger
             _musicSource1.Stop();
             _musicSource2.Stop();
             ClearPlaylist();
+            
+            _unityCancellationSource?.Cancel();
+            _unityCancellationSource = null;
+            _isMusicLoading = false;
         }
 
 
@@ -438,7 +444,7 @@ namespace Mane.SoundManeger
             }
 
             if (startAfterCurrentTrack)
-                CacheNextTrack();
+                CacheNextTrack(GetCancellationToken());
             else
                 OnTrackChange();
         }
@@ -477,11 +483,25 @@ namespace Mane.SoundManeger
                 }
             }
 
-            CacheNextTrack();
+            CacheNextTrack(GetCancellationToken());
         }
         
-        private async void CacheNextTrack() =>
+        private async void CacheNextTrack(CancellationToken token)
+        {
+            while (_isMusicLoading)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    _isMusicLoading = false;
+                    
+                    return;
+                }
+
+                await Task.Yield();
+            }
+
             _nextPlaylistTrack = await GetClip(_playlistOwner, _playlist[_playlistPointer], true);
+        }
 
         private async void OnTrackChange()
         {
@@ -493,10 +513,12 @@ namespace Mane.SoundManeger
                 return;
             }
 
-            if (_isMusicLoading) return;
-            
-            PlayMusicClip(await GetClip(_playlistOwner, _playlist[_playlistPointer], true));
-            PrepareNextTrack();
+            var clip = await GetClip(_playlistOwner, _playlist[_playlistPointer], true);
+            if (clip)
+            {
+                PlayMusicClip(clip);
+                PrepareNextTrack();
+            }
         }
 
         private void ClearPlaylist()
@@ -504,6 +526,7 @@ namespace Mane.SoundManeger
             _playlist = null;
             _playlistOwner = null;
             _nextPlaylistTrack = null;
+            _playlistPointer = 0;
         }
 
 
@@ -632,15 +655,44 @@ namespace Mane.SoundManeger
         private async Task<AudioClip> GetClip(MonoBehaviour requester, string path, bool isMusic)
         {
             if (isMusic)
+            {
+                if (_isMusicLoading)
+                {
+                    _unityCancellationSource?.Cancel();
+                    _unityCancellationSource = null;
+                }
+
                 _isMusicLoading = true;
+            }
             
-            var task = _musicLoader.GetMusicAsync(requester, path);
-            await task;
-            
-            if (isMusic)
-                _isMusicLoading = false;
-            
+            var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken());
+
+            try
+            {
+                await task;
+            }
+            catch (TaskCanceledException)
+            {
+#if UNITY_EDITOR
+                Debug.LogWarning($"<b>Sound Maneger:</b> Music loading was canceled: {path}");
+#endif
+                
+                return null;
+            }
+            finally
+            {
+                if (isMusic)
+                    _isMusicLoading = false;
+            }
+
             return task.Result;
+        }
+        
+        private CancellationToken GetCancellationToken()
+        {
+            _unityCancellationSource ??= new UnityCancellationTokenSource();
+
+            return _unityCancellationSource.Token;
         }
 
         private void Update()

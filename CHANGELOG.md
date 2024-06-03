@@ -1,3 +1,7 @@
+1.5.0:
+    - Added support of Cancellation Token when loading music.
+    - Fixed some issues with playlists.
+
 1.4.9:
     - Additional fix for game pause and SFX playing.
 
