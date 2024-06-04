@@ -1,4 +1,4 @@
-1.5.1:
+1.5.2:
     - Fixed an issue when SFX downloads can be cancelled with some Music tracks.
 
 1.5.0:

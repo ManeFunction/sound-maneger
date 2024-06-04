@@ -23,8 +23,6 @@ namespace Mane.SoundManeger
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path)) return null;
-
-            await Task.Delay(3000, token);
             
             if (!owner) owner = SoundManeger.Instance;
             
