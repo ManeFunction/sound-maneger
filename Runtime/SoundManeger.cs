@@ -62,7 +62,8 @@ namespace Mane.SoundManeger
 
         private IMusicLoader _musicLoader;
         private volatile bool _isMusicLoading;
-        private UnityCancellationTokenSource _unityCancellationSource;
+        private UnityCancellationTokenSource _sfxCancellationSource;
+        private UnityCancellationTokenSource _musicCancellationSource;
 
         private Coroutine _transitionAwaiter;
 
@@ -409,13 +410,13 @@ namespace Mane.SoundManeger
             _musicSource2.Stop();
             ClearPlaylist();
             
-            _unityCancellationSource?.Cancel();
-            _unityCancellationSource = null;
+            _musicCancellationSource?.Cancel();
+            _musicCancellationSource = null;
             _isMusicLoading = false;
         }
 
 
-        private void StartPlaylist(MonoBehaviour owner, List<string> playlist, bool startAfterCurrentTrack = false)
+        private void StartPlaylist(MonoBehaviour owner, List<string> playlist, bool startAfterCurrentTrack)
         {
             _playlist = playlist;
             _playlistOwner = owner;
@@ -444,7 +445,7 @@ namespace Mane.SoundManeger
             }
 
             if (startAfterCurrentTrack)
-                CacheNextTrack(GetCancellationToken());
+                CacheNextTrack(GetCancellationToken(true));
             else
                 OnTrackChange();
         }
@@ -483,7 +484,7 @@ namespace Mane.SoundManeger
                 }
             }
 
-            CacheNextTrack(GetCancellationToken());
+            CacheNextTrack(GetCancellationToken(true));
         }
         
         private async void CacheNextTrack(CancellationToken token)
@@ -658,14 +659,14 @@ namespace Mane.SoundManeger
             {
                 if (_isMusicLoading)
                 {
-                    _unityCancellationSource?.Cancel();
-                    _unityCancellationSource = null;
+                    _musicCancellationSource?.Cancel();
+                    _musicCancellationSource = null;
                 }
 
                 _isMusicLoading = true;
             }
             
-            var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken());
+            var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(isMusic));
 
             try
             {
@@ -688,11 +689,18 @@ namespace Mane.SoundManeger
             return task.Result;
         }
         
-        private CancellationToken GetCancellationToken()
+        private CancellationToken GetCancellationToken(bool isMusic)
         {
-            _unityCancellationSource ??= new UnityCancellationTokenSource();
+            if (!isMusic)
+            {
+                _sfxCancellationSource ??= new UnityCancellationTokenSource();
+                
+                return _sfxCancellationSource.Token;
+            }
+            
+            _musicCancellationSource ??= new UnityCancellationTokenSource();
 
-            return _unityCancellationSource.Token;
+            return _musicCancellationSource.Token;
         }
 
         private void Update()

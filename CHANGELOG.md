@@ -1,3 +1,6 @@
+1.5.1:
+    - Fixed an issue when SFX downloads can be cancelled with some Music tracks.
+
 1.5.0:
     - Added support of Cancellation Token when loading music.
     - Fixed some issues with playlists.
