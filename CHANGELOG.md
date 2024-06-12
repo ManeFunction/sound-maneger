@@ -1,3 +1,6 @@
+1.5.3:
+    - Changed TaskCanceledException to OperationCanceledException on music loading to prevent uncontrolled exceptions flood.
+
 1.5.2:
     - Fixed an issue when SFX downloads can be cancelled with some Music tracks.
 

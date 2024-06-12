@@ -672,7 +672,7 @@ namespace Mane.SoundManeger
             {
                 await task;
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
 #if UNITY_EDITOR
                 Debug.LogWarning($"<b>Sound Maneger:</b> Music loading was canceled: {path}");
