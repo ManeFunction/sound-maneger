@@ -59,6 +59,8 @@ namespace Mane.SoundManeger
         [Header("Optimization")]
         [Tooltip("Time in seconds after which inactive SFX timings will be cleaned up. Should not be less than max SFX length in your game.")]
         [SerializeField] private float _sfxTimingsCleanupThreshold = 60f;
+        [SerializeField] private int _maxConcurrentSfx = 100;
+        [SerializeField] private float _loadingTimeout = 30f;
 
         
         private AudioMixerSnapshot _music1Snapshot;
@@ -83,10 +85,10 @@ namespace Mane.SoundManeger
         private MonoBehaviour _playlistOwner; 
         private PlayMode _mode;
         private AudioClip _nextPlaylistTrack;
+        private volatile int _modeFlags;
 
         private bool _activeFirstMusicSource;
         private bool _lowpass;
-        private bool _manualPlaylistMode;
 
         private bool _muteMusic;
         private bool _muteSfx;
@@ -97,7 +99,7 @@ namespace Mane.SoundManeger
         private readonly object _sfxTokenLock = new();
         private readonly ConcurrentBag<AudioClip> _activeSfx = new();
         private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
-        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new();
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new(100, 100); // Limit initial capacity
 
         private float _lastCleanupTime;
 
@@ -494,7 +496,7 @@ namespace Mane.SoundManeger
         /// </summary>
         public void StopMusic()
         {
-            _mode &= PlayMode.PlayingMusic;
+            RemoveMode(PlayMode.PlayingMusic);
             PlaylistTrackChange -= OnTrackChange;
             _musicSource1.Stop();
             _musicSource2.Stop();
@@ -506,6 +508,10 @@ namespace Mane.SoundManeger
                 _musicCancellationSource.Dispose();
                 _musicCancellationSource = null;
             }
+
+            // Clear references to allow GC
+            _musicSource1.clip = null;
+            _musicSource2.clip = null;
         }
 
 
@@ -742,78 +748,70 @@ namespace Mane.SoundManeger
                 return null;
             }
 
-            if (isMusic)
+            try
             {
-                _isMusicLoading = true;
-                try
+                if (isMusic)
                 {
-                    await _musicLoadingSemaphore.WaitAsync();
+                    _isMusicLoading = true;
                     try
                     {
-                        if (_musicCancellationSource != null)
+                        if (!await _musicLoadingSemaphore.WaitAsync(TimeSpan.FromSeconds(_loadingTimeout)))
                         {
-                            _musicCancellationSource.Cancel();
-                            _musicCancellationSource.Dispose();
-                            _musicCancellationSource = null;
+                            Debug.LogError("[SoundManeger] Music loading semaphore timeout!");
+                            return null;
                         }
 
-                        var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(true));
-                        var clip = await task;
-                        
-                        if (clip == null)
-                            Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
-                        
-                        return clip;
-                    }
-                    catch (OperationCanceledException)
-                    {
-#if UNITY_EDITOR
-                        Debug.LogWarning($"[SoundManeger] Music loading was canceled: {path}");
-#endif
-                        return null;
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError($"[SoundManeger] Error loading music clip at {path}: {e.Message}");
-                        return null;
+                        try
+                        {
+                            if (_musicCancellationSource != null)
+                            {
+                                _musicCancellationSource.Cancel();
+                                _musicCancellationSource.Dispose();
+                                _musicCancellationSource = null;
+                            }
+
+                            var clip = await _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(true));
+                            
+                            if (clip == null)
+                                Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
+                            
+                            return clip;
+                        }
+                        finally
+                        {
+                            _musicLoadingSemaphore.Release();
+                        }
                     }
                     finally
                     {
-                        _musicLoadingSemaphore.Release();
+                        _isMusicLoading = false;
                     }
                 }
-                finally
-                {
-                    _isMusicLoading = false;
-                }
-            }
-            
-            // For SFX, we only need to protect token creation/disposal
-            CancellationToken token;
-            lock (_sfxTokenLock)
-            {
-                token = GetCancellationToken(false);
-            }
-            
-            try
-            {
-                var clip = await _musicLoader.GetMusicAsync(requester, path, token);
                 
-                if (clip == null)
+                // For SFX, we only need to protect token creation/disposal
+                CancellationToken token;
+                lock (_sfxTokenLock)
+                {
+                    token = GetCancellationToken(false);
+                }
+                
+                var sfxClip = await _musicLoader.GetMusicAsync(requester, path, token);
+                
+                if (sfxClip == null)
                     Debug.LogError($"[SoundManeger] Failed to load SFX clip at path: {path}");
                 
-                return clip;
+                return sfxClip;
             }
             catch (OperationCanceledException)
             {
 #if UNITY_EDITOR
-                Debug.LogWarning($"[SoundManeger] SFX loading was canceled: {path}");
+                Debug.LogWarning($"[SoundManeger] Loading was canceled: {path}");
 #endif
                 return null;
             }
             catch (Exception e)
             {
-                Debug.LogError($"[SoundManeger] Error loading SFX clip at {path}: {e.Message}");
+                Debug.LogError($"[SoundManeger] Error loading clip at {path}: {e.Message}");
                 return null;
             }
         }
@@ -843,10 +841,11 @@ namespace Mane.SoundManeger
             if (currentTime - _lastCleanupTime >= _sfxTimingsCleanupThreshold)
             {
                 CleanupSfxTimings();
+                CleanupActiveSfx();
                 _lastCleanupTime = currentTime;
             }
 
-            if (_mode == PlayMode.NeedMusicSwitch && !IsMusicPlaying && !_isMusicLoading)
+            if (GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && !_isMusicLoading)
                 PlaylistTrackChange?.Invoke();
         }
         
@@ -947,6 +946,27 @@ namespace Mane.SoundManeger
             }
         }
 
+        private void CleanupActiveSfx()
+        {
+            // Cleanup interrupted coroutines
+            var currentTime = Time.unscaledTime;
+            foreach (var kvp in _activeSfxCoroutines.ToArray())
+            {
+                if (kvp.Key == null || !kvp.Key || currentTime > kvp.Key.length * 2)
+                {
+                    _activeSfxCoroutines.TryRemove(kvp.Key, out var coroutine);
+                    if (coroutine != null)
+                        StopCoroutine(coroutine);
+                }
+            }
+
+            // Enforce max concurrent SFX limit
+            while (_activeSfx.Count > _maxConcurrentSfx)
+            {
+                _activeSfx.TryTake(out _);
+            }
+        }
+
         protected virtual void OnDestroy() => Dispose();
 
         public void Dispose()
@@ -1035,6 +1055,28 @@ namespace Mane.SoundManeger
             }
 
             CacheNextTrack(GetCancellationToken(true));
+        }
+
+        private PlayMode GetMode()
+        {
+            return (PlayMode)Interlocked.CompareExchange(ref _modeFlags, 0, 0);
+        }
+
+        private void SetMode(PlayMode value)
+        {
+            Interlocked.Exchange(ref _modeFlags, (int)value);
+        }
+
+        private void AddMode(PlayMode flag)
+        {
+            var current = Interlocked.CompareExchange(ref _modeFlags, 0, 0);
+            Interlocked.Exchange(ref _modeFlags, current | (int)flag);
+        }
+
+        private void RemoveMode(PlayMode flag)
+        {
+            var current = Interlocked.CompareExchange(ref _modeFlags, 0, 0);
+            Interlocked.Exchange(ref _modeFlags, current & ~(int)flag);
         }
     }
 }
