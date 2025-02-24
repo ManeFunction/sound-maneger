@@ -62,6 +62,8 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music2LowSnapshot;
 
         private IMusicLoader _musicLoader;
+        private readonly SemaphoreSlim _musicLoadingSemaphore = new SemaphoreSlim(1, 1);
+        private readonly object _playlistLock = new object();
         private volatile bool _isMusicLoading;
         private UnityCancellationTokenSource _sfxCancellationSource;
         private UnityCancellationTokenSource _musicCancellationSource;
@@ -87,9 +89,10 @@ namespace Mane.SoundManeger
         private float _cachedSfxVolume = .8f;
 
         // used to keep active clips and prevent unloading while playing
-        private readonly ConcurrentBag<AudioClip> _activeSfx = new();
-        private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
-        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new();
+        private readonly object _sfxTokenLock = new object();
+        private readonly ConcurrentBag<AudioClip> _activeSfx = new ConcurrentBag<AudioClip>();
+        private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new ConcurrentDictionary<AudioClip, Coroutine>();
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new ConcurrentDictionary<string, ConcurrentQueue<float>>();
 
         private bool _isDisposed;
 
@@ -418,38 +421,40 @@ namespace Mane.SoundManeger
                 _musicCancellationSource.Dispose();
                 _musicCancellationSource = null;
             }
-            _isMusicLoading = false;
         }
 
 
         private void StartPlaylist(MonoBehaviour owner, List<string> playlist, bool startAfterCurrentTrack)
         {
-            _playlist = playlist;
-            _playlistOwner = owner;
-            _nextPlaylistTrack = null;
-
-            _musicSource1.loop = false;
-            _musicSource2.loop = false;
-            _mode |= PlayMode.PlaylistActive;
-
-            // safe way to exclude double subscription
-            PlaylistTrackChange -= OnTrackChange;
-            PlaylistTrackChange += OnTrackChange;
-            
-            switch (_playlistPlayingOrder)
+            lock (_playlistLock)
             {
-                case PlayingOrder.Default:
-                    _playlistPointer = 0;
-                    break;
-                
-                case PlayingOrder.Shuffle: 
-                    _playlistPointer = 0;
-                    _playlist.Shuffle();
-                    break;
-                
-                case PlayingOrder.Random:
-                    _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
-                    break;
+                _playlist = new List<string>(playlist); // Create defensive copy
+                _playlistOwner = owner;
+                _nextPlaylistTrack = null;
+
+                _musicSource1.loop = false;
+                _musicSource2.loop = false;
+                _mode |= PlayMode.PlaylistActive;
+
+                // safe way to exclude double subscription
+                PlaylistTrackChange -= OnTrackChange;
+                PlaylistTrackChange += OnTrackChange;
+            
+                switch (_playlistPlayingOrder)
+                {
+                    case PlayingOrder.Default:
+                        _playlistPointer = 0;
+                        break;
+                    
+                    case PlayingOrder.Shuffle: 
+                        _playlistPointer = 0;
+                        _playlist.Shuffle();
+                        break;
+                    
+                    case PlayingOrder.Random:
+                        _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
+                        break;
+                }
             }
 
             if (startAfterCurrentTrack)
@@ -458,58 +463,16 @@ namespace Mane.SoundManeger
                 OnTrackChange();
         }
 
-        private void PrepareNextTrack()
-        {
-            if (_playlistPlayingOrder == PlayingOrder.Random)
-            {
-                if (_playlist.Count == 1)
-                {
-                    _playlistPointer = 0;
-                }
-                else
-                {
-                    int old = _playlistPointer;
-                    do
-                    {
-                        _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
-                    } while (_playlistPointer == old);
-                }
-            }
-            else
-            {
-                _playlistPointer++;
-                if (_playlistPointer >= _playlist.Count)
-                {
-                    _playlistPointer = 0;
-                    if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
-                    {
-                        var lastTrack = _playlist.Last();
-                        do
-                        {
-                            _playlist.Shuffle();
-                        } while (_playlist.First() == lastTrack);
-                    }
-                }
-            }
-
-            CacheNextTrack(GetCancellationToken(true));
-        }
-        
         private async void CacheNextTrack(CancellationToken token)
         {
-            while (_isMusicLoading)
+            string trackPath;
+            lock (_playlistLock)
             {
-                if (token.IsCancellationRequested)
-                {
-                    _isMusicLoading = false;
-                    
-                    return;
-                }
-
-                await Task.Yield();
+                if (_playlist == null || _playlist.Count == 0) return;
+                trackPath = _playlist[_playlistPointer];
             }
 
-            _nextPlaylistTrack = await GetClip(_playlistOwner, _playlist[_playlistPointer], true);
+            _nextPlaylistTrack = await GetClip(_playlistOwner, trackPath, true);
         }
 
         private async void OnTrackChange()
@@ -532,10 +495,13 @@ namespace Mane.SoundManeger
 
         private void ClearPlaylist()
         {
-            _playlist = null;
-            _playlistOwner = null;
-            _nextPlaylistTrack = null;
-            _playlistPointer = 0;
+            lock (_playlistLock)
+            {
+                _playlist = null;
+                _playlistOwner = null;
+                _nextPlaylistTrack = null;
+                _playlistPointer = 0;
+            }
         }
 
 
@@ -665,48 +631,72 @@ namespace Mane.SoundManeger
         {
             if (isMusic)
             {
-                if (_isMusicLoading)
-                {
-                    _musicCancellationSource?.Cancel();
-                    _musicCancellationSource = null;
-                }
-
                 _isMusicLoading = true;
+                try
+                {
+                    await _musicLoadingSemaphore.WaitAsync();
+                    try
+                    {
+                        if (_musicCancellationSource != null)
+                        {
+                            _musicCancellationSource.Cancel();
+                            _musicCancellationSource.Dispose();
+                            _musicCancellationSource = null;
+                        }
+
+                        var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(true));
+                        return await task;
+                    }
+                    catch (OperationCanceledException)
+                    {
+#if UNITY_EDITOR
+                        Debug.LogWarning($"<b>Sound Maneger:</b> Music loading was canceled: {path}");
+#endif
+                        return null;
+                    }
+                    finally
+                    {
+                        _musicLoadingSemaphore.Release();
+                    }
+                }
+                finally
+                {
+                    _isMusicLoading = false;
+                }
             }
             
-            var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(isMusic));
-
+            // For SFX, we only need to protect token creation/disposal
+            CancellationToken token;
+            lock (_sfxTokenLock)
+            {
+                token = GetCancellationToken(false);
+            }
+            
             try
             {
-                await task;
+                return await _musicLoader.GetMusicAsync(requester, path, token);
             }
             catch (OperationCanceledException)
             {
 #if UNITY_EDITOR
-                Debug.LogWarning($"<b>Sound Maneger:</b> Music loading was canceled: {path}");
+                Debug.LogWarning($"<b>Sound Maneger:</b> SFX loading was canceled: {path}");
 #endif
-                
                 return null;
             }
-            finally
-            {
-                if (isMusic)
-                    _isMusicLoading = false;
-            }
-
-            return task.Result;
         }
         
         private CancellationToken GetCancellationToken(bool isMusic)
         {
             if (!isMusic)
             {
+                // Note: This method is called within a lock for SFX
                 if (_sfxCancellationSource == null || _sfxCancellationSource.IsCancellationRequested)
                     CreateNewSfxCancellationSource();
                 
                 return _sfxCancellationSource.Token;
             }
             
+            // Music token operations are protected by semaphore in GetClip
             if (_musicCancellationSource == null || _musicCancellationSource.IsCancellationRequested)
                 CreateNewMusicCancellationSource();
 
@@ -799,6 +789,7 @@ namespace Mane.SoundManeger
             _musicCancellationSource?.Dispose();
             _sfxCancellationSource = null;
             _musicCancellationSource = null;
+            _musicLoadingSemaphore.Dispose();
 
             ClearPlaylist();
         }
@@ -815,12 +806,55 @@ namespace Mane.SoundManeger
 
         private void CreateNewSfxCancellationSource()
         {
+            // Note: This method is called within a lock
             if (_sfxCancellationSource != null)
             {
                 _sfxCancellationSource.Cancel();
                 _sfxCancellationSource.Dispose();
             }
             _sfxCancellationSource = new UnityCancellationTokenSource();
+        }
+
+        private void PrepareNextTrack()
+        {
+            lock (_playlistLock)
+            {
+                if (_playlist == null || _playlist.Count == 0) return;
+
+                if (_playlistPlayingOrder == PlayingOrder.Random)
+                {
+                    if (_playlist.Count == 1)
+                    {
+                        _playlistPointer = 0;
+                    }
+                    else
+                    {
+                        int old = _playlistPointer;
+                        do
+                        {
+                            _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
+                        } while (_playlistPointer == old);
+                    }
+                }
+                else
+                {
+                    _playlistPointer++;
+                    if (_playlistPointer >= _playlist.Count)
+                    {
+                        _playlistPointer = 0;
+                        if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
+                        {
+                            var lastTrack = _playlist.Last();
+                            do
+                            {
+                                _playlist.Shuffle();
+                            } while (_playlist.First() == lastTrack);
+                        }
+                    }
+                }
+            }
+
+            CacheNextTrack(GetCancellationToken(true));
         }
     }
 }

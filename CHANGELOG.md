@@ -1,6 +1,7 @@
 1.6.0:
     - Made SoundManager disposable.
-    - Fixed possible memory leaks and race conditions with SFX caching.
+    - Fixed possible memory leaks with SFX caching.
+    - Fixed race conditions with SFX and playlist operations.
     - Simplified SFX caching logic with Queue instead of manually indexed list.
 
 1.5.3:
