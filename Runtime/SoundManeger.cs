@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +13,7 @@ namespace Mane.SoundManeger
 {
     [AddComponentMenu("Audio/Sound Manager")]
     [DisallowMultipleComponent]
-    public class SoundManeger : MonoSingleton<SoundManeger>
+    public class SoundManeger : MonoSingleton<SoundManeger>, IDisposable
     {
         public enum PlayingOrder
         {
@@ -86,10 +87,11 @@ namespace Mane.SoundManeger
         private float _cachedSfxVolume = .8f;
 
         // used to keep active clips and prevent unloading while playing
-        // ReSharper disable once CollectionNeverQueried.Local
-        private readonly List<AudioClip> _activeSfx = new List<AudioClip>();
-        private readonly Dictionary<string, List<float>> _limitedSfxTimings = new Dictionary<string, List<float>>();
+        private readonly ConcurrentBag<AudioClip> _activeSfx = new();
+        private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new();
 
+        private bool _isDisposed;
 
         protected override void Awake()
         {
@@ -410,8 +412,12 @@ namespace Mane.SoundManeger
             _musicSource2.Stop();
             ClearPlaylist();
             
-            _musicCancellationSource?.Cancel();
-            _musicCancellationSource = null;
+            if (_musicCancellationSource != null)
+            {
+                _musicCancellationSource.Cancel();
+                _musicCancellationSource.Dispose();
+                _musicCancellationSource = null;
+            }
             _isMusicLoading = false;
         }
 
@@ -425,9 +431,11 @@ namespace Mane.SoundManeger
             _musicSource1.loop = false;
             _musicSource2.loop = false;
             _mode |= PlayMode.PlaylistActive;
+
             // safe way to exclude double subscription
             PlaylistTrackChange -= OnTrackChange;
             PlaylistTrackChange += OnTrackChange;
+            
             switch (_playlistPlayingOrder)
             {
                 case PlayingOrder.Default:
@@ -693,12 +701,14 @@ namespace Mane.SoundManeger
         {
             if (!isMusic)
             {
-                _sfxCancellationSource ??= new UnityCancellationTokenSource();
+                if (_sfxCancellationSource == null || _sfxCancellationSource.IsCancellationRequested)
+                    CreateNewSfxCancellationSource();
                 
                 return _sfxCancellationSource.Token;
             }
             
-            _musicCancellationSource ??= new UnityCancellationTokenSource();
+            if (_musicCancellationSource == null || _musicCancellationSource.IsCancellationRequested)
+                CreateNewMusicCancellationSource();
 
             return _musicCancellationSource.Token;
         }
@@ -713,11 +723,29 @@ namespace Mane.SoundManeger
         
         private IEnumerator SfxCache(AudioClip clip)
         {
+            if (_activeSfxCoroutines.TryGetValue(clip, out var existingCoroutine))
+            {
+                StopCoroutine(existingCoroutine);
+                _activeSfxCoroutines.TryRemove(clip, out _);
+            }
+
             _activeSfx.Add(clip);
+            _activeSfxCoroutines[clip] = StartCoroutine(SfxCacheInternal(clip));
+            
+            yield break;
+        }
 
-            yield return new WaitForSecondsRealtime(clip.length);
-
-            _activeSfx.Remove(clip);
+        private IEnumerator SfxCacheInternal(AudioClip clip)
+        {
+            try
+            {
+                yield return new WaitForSecondsRealtime(clip.length);
+            }
+            finally
+            {
+                _activeSfx.TryTake(out _);
+                _activeSfxCoroutines.TryRemove(clip, out _);
+            }
         }
 
         private bool IsSoundPlayingAvailable(AudioClip audioClip)
@@ -725,40 +753,74 @@ namespace Mane.SoundManeger
             string clipName = audioClip.name;
             float currentTime = Time.unscaledTime;
 
-            bool result = true;
+            var times = _limitedSfxTimings.GetOrAdd(clipName, _ => new ConcurrentQueue<float>(new[] { currentTime }));
             
-            if (!_limitedSfxTimings.TryGetValue(clipName, out List<float> times))
+            // If we have less sounds than maximum allowed, add new timing
+            if (times.Count < _maxSameSoundsCount + 1)
             {
-                // first list element contains rotation index
-                _limitedSfxTimings.Add(clipName, new List<float> { 1, currentTime });
-            }
-            else
-            {
-                int timesCount = times.Count - 1;
-                if (timesCount <= _maxSameSoundsCount)
-                {
-                    times.Add(currentTime);
-                }
-                else
-                {
-                    int index = (int)times[0];
-                    if (currentTime - times[index] < audioClip.length)
-                    {
-                        result = false;
-                    }
-                    else
-                    {
-                        times[index] = currentTime;
-                        
-                        index++;
-                        if (index >= timesCount)
-                            index = 1;
-                        times[0] = index;
-                    }
-                }
+                times.Enqueue(currentTime);
+                return true;
             }
 
-            return result;
+            // Check if oldest sound has finished playing
+            if (times.TryPeek(out float oldestTime))
+            {
+                if (currentTime - oldestTime < audioClip.length)
+                    return false;
+                
+                // Remove oldest time and add new one
+                times.TryDequeue(out _);
+                times.Enqueue(currentTime);
+                return true;
+            }
+
+            return false;
+        }
+
+        protected virtual void OnDestroy() => Dispose();
+
+        public void Dispose()
+        {
+            if (_isDisposed) return;
+            
+            _isDisposed = true;
+
+            foreach (var coroutine in _activeSfxCoroutines.Values)
+            {
+                if (coroutine != null)
+                    StopCoroutine(coroutine);
+            }
+            _activeSfxCoroutines.Clear();
+            
+            while (_activeSfx.TryTake(out _)) { }
+            _limitedSfxTimings.Clear();
+
+            _sfxCancellationSource?.Dispose();
+            _musicCancellationSource?.Dispose();
+            _sfxCancellationSource = null;
+            _musicCancellationSource = null;
+
+            ClearPlaylist();
+        }
+
+        private void CreateNewMusicCancellationSource()
+        {
+            if (_musicCancellationSource != null)
+            {
+                _musicCancellationSource.Cancel();
+                _musicCancellationSource.Dispose();
+            }
+            _musicCancellationSource = new UnityCancellationTokenSource();
+        }
+
+        private void CreateNewSfxCancellationSource()
+        {
+            if (_sfxCancellationSource != null)
+            {
+                _sfxCancellationSource.Cancel();
+                _sfxCancellationSource.Dispose();
+            }
+            _sfxCancellationSource = new UnityCancellationTokenSource();
         }
     }
 }

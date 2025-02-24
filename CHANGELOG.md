@@ -1,3 +1,8 @@
+1.6.0:
+    - Made SoundManager disposable.
+    - Fixed possible memory leaks and race conditions with SFX caching.
+    - Simplified SFX caching logic with Queue instead of manually indexed list.
+
 1.5.3:
     - Changed TaskCanceledException to OperationCanceledException on music loading to prevent uncontrolled exceptions flood.
 
