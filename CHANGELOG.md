@@ -1,6 +1,7 @@
 1.6.0:
     ! Package in a preview state due to significant changes requiring thorough testing.
     - Made SoundManager disposable.
+    - Added separate option to pause music and SFX.
     - Fixed possible memory leaks with SFX caching.
     - Fixed race conditions with SFX and playlist operations.
     - Simplified SFX caching logic with Queue instead of manually indexed list.

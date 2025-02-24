@@ -54,6 +54,7 @@ namespace Mane.SoundManeger
         [SerializeField] private float _lowpassTime = 0.4f;
         [SerializeField] private PlayingOrder _playlistPlayingOrder = PlayingOrder.Default;
         [SerializeField] private int _maxSameSoundsCount = 3;
+        [SerializeField] private bool _continueAudioOnPause = true;
 
         [Header("Optimization")]
         [Tooltip("Time in seconds after which inactive SFX timings will be cleaned up. Should not be less than max SFX length in your game.")]
@@ -102,6 +103,30 @@ namespace Mane.SoundManeger
 
         private bool _isDisposed;
 
+        /// <summary>
+        /// Set whether audio should continue playing when the game is paused.
+        /// This affects both Time.timeScale = 0 and AudioListener.pause states.
+        /// </summary>
+        public bool ContinueAudioOnPause
+        {
+            get => _continueAudioOnPause;
+            set
+            {
+                if (_continueAudioOnPause == value) return;
+                _continueAudioOnPause = value;
+                ConfigureAudioSources();
+            }
+        }
+
+        /// <summary>
+        /// Pause or unpause all audio. This is separate from Unity's Time.timeScale.
+        /// </summary>
+        public bool AudioPaused
+        {
+            get => AudioListener.pause;
+            set => AudioListener.pause = value;
+        }
+
         protected override void Awake()
         {
             base.Awake();
@@ -117,13 +142,26 @@ namespace Mane.SoundManeger
                 return;
             }
 
+            ConfigureAudioSources();
+
             if (transform.parent == null)
                 DontDestroyOnLoad(gameObject);
         }
 
-
         private void Reset() => FillMixerStuff();
-        
+
+
+        private void ConfigureAudioSources()
+        {
+            _musicSource1.ignoreListenerPause = _continueAudioOnPause;
+            _musicSource2.ignoreListenerPause = _continueAudioOnPause;
+            
+            _sfxSource.ignoreListenerPause = _continueAudioOnPause;
+            if (_duckBgmSource != null)
+                _duckBgmSource.ignoreListenerPause = _continueAudioOnPause;
+            if (_duckAllSource != null)
+                _duckAllSource.ignoreListenerPause = _continueAudioOnPause;
+        }        
         
         private void FillMixerStuff()
         {
