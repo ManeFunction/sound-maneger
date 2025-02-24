@@ -104,6 +104,13 @@ namespace Mane.SoundManeger
             
             FillMixerStuff();
 
+            if (!ValidateAudioSources())
+            {
+                Debug.LogError("[SoundManeger] Critical components are missing! Check the prefab setup.");
+                enabled = false;
+                return;
+            }
+
             if (transform.parent == null)
                 DontDestroyOnLoad(gameObject);
         }
@@ -119,8 +126,7 @@ namespace Mane.SoundManeger
 
             if (_mixer == null)
             {
-                Debug.LogWarning("Can't find AudioMixer in the project!");
-                
+                Debug.LogError("[SoundManeger] Can't find AudioMixer in the project! Audio features will be disabled.");
                 return;
             }
 
@@ -128,8 +134,43 @@ namespace Mane.SoundManeger
             _music1LowSnapshot = _mixer.FindSnapshot("Music1Lowpass");
             _music2Snapshot = _mixer.FindSnapshot("Music2");
             _music2LowSnapshot = _mixer.FindSnapshot("Music2Lowpass");
+
+            if (_music1Snapshot == null || _music2Snapshot == null)
+            {
+                Debug.LogError("[SoundManeger] Missing required snapshots Music1/Music2! Music features will be disabled.");
+                _mixer = null;
+                return;
+            }
+
+            if (_music1LowSnapshot == null || _music2LowSnapshot == null)
+            {
+                Debug.LogWarning("[SoundManeger] Missing lowpass snapshots! Lowpass feature will be disabled.");
+                _lowpass = false;
+            }
         }
 
+        private bool ValidateAudioSources()
+        {
+            if (_musicSource1 == null || _musicSource2 == null)
+            {
+                Debug.LogError("[SoundManeger] Missing music sources! Music features will be disabled.");
+                return false;
+            }
+
+            if (_sfxSource == null)
+            {
+                Debug.LogError("[SoundManeger] Missing SFX source! SFX features will be disabled.");
+                return false;
+            }
+
+            if (_duckBgmSource == null)
+                Debug.LogWarning("[SoundManeger] Missing duck BGM source! Duck BGM feature will be disabled.");
+
+            if (_duckAllSource == null)
+                Debug.LogWarning("[SoundManeger] Missing duck all source! Duck all feature will be disabled.");
+
+            return true;
+        }
 
         public AudioMixer Mixer => _mixer;
 
@@ -512,21 +553,27 @@ namespace Mane.SoundManeger
         /// <param name="duck">Ducking type.</param>
         public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None)
         {
-            if (clip == null) return;
+            if (_mixer == null || clip == null || !IsSoundPlayingAvailable(clip) || _sfxSource == null)
+                return;
 
-            if (!IsSoundPlayingAvailable(clip)) return;
-            
             // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
             StartCoroutine(SfxCache(clip));
 
+            // Play sound based on duck type with null checks
             switch (duck)
             {
                 case DuckType.MusicOnly:
-                    _duckBgmSource.PlayOneShot(clip);
+                    if (_duckBgmSource != null)
+                        _duckBgmSource.PlayOneShot(clip);
+                    else
+                        _sfxSource.PlayOneShot(clip);
                     break;
 
                 case DuckType.AllSources:
-                    _duckAllSource.PlayOneShot(clip);
+                    if (_duckAllSource != null)
+                        _duckAllSource.PlayOneShot(clip);
+                    else
+                        _sfxSource.PlayOneShot(clip);
                     break;
 
                 default:
@@ -584,6 +631,8 @@ namespace Mane.SoundManeger
         
         private void PlayMusicClip(AudioClip clip)
         {
+            if (_mixer == null || clip == null) return;
+
             if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
                 _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
             {
@@ -591,29 +640,37 @@ namespace Mane.SoundManeger
                 return;
             }
 
-            if (_activeFirstMusicSource)
+            try
             {
-                _musicSource2.clip = clip;
-                if (!_mode.HasFlag(PlayMode.PlaylistActive))
-                    _musicSource2.loop = true;
-                _musicSource2.Play();
-                _music2Snapshot.TransitionTo(_transitionTime);
-                _activeFirstMusicSource = false;
-                if (_transitionAwaiter != null)
-                    StopCoroutine(_transitionAwaiter);
-                _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource1, _transitionTime));
+                if (_activeFirstMusicSource)
+                {
+                    _musicSource2.clip = clip;
+                    if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                        _musicSource2.loop = true;
+                    _musicSource2.Play();
+                    _music2Snapshot.TransitionTo(_transitionTime);
+                    _activeFirstMusicSource = false;
+                    if (_transitionAwaiter != null)
+                        StopCoroutine(_transitionAwaiter);
+                    _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource1, _transitionTime));
+                }
+                else
+                {
+                    _musicSource1.clip = clip;
+                    if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                        _musicSource1.loop = true;
+                    _musicSource1.Play();
+                    _music1Snapshot.TransitionTo(_transitionTime);
+                    _activeFirstMusicSource = true;
+                    if (_transitionAwaiter != null)
+                        StopCoroutine(_transitionAwaiter);
+                    _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource2, _transitionTime));
+                }
             }
-            else
+            catch (Exception e)
             {
-                _musicSource1.clip = clip;
-                if (!_mode.HasFlag(PlayMode.PlaylistActive))
-                    _musicSource1.loop = true;
-                _musicSource1.Play();
-                _music1Snapshot.TransitionTo(_transitionTime);
-                _activeFirstMusicSource = true;
-                if (_transitionAwaiter != null)
-                    StopCoroutine(_transitionAwaiter);
-                _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource2, _transitionTime));
+                Debug.LogError($"[SoundManeger] Failed to play music clip {clip.name}: {e.Message}");
+                return;
             }
             
             _mode |= PlayMode.PlayingMusic;
@@ -629,6 +686,18 @@ namespace Mane.SoundManeger
         
         private async Task<AudioClip> GetClip(MonoBehaviour requester, string path, bool isMusic)
         {
+            if (string.IsNullOrEmpty(path))
+            {
+                Debug.LogError("[SoundManeger] Attempted to load clip with null or empty path!");
+                return null;
+            }
+
+            if (_isDisposed)
+            {
+                Debug.LogWarning("[SoundManeger] Attempted to load clip after disposal!");
+                return null;
+            }
+
             if (isMusic)
             {
                 _isMusicLoading = true;
@@ -645,13 +714,23 @@ namespace Mane.SoundManeger
                         }
 
                         var task = _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(true));
-                        return await task;
+                        var clip = await task;
+                        
+                        if (clip == null)
+                            Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
+                        
+                        return clip;
                     }
                     catch (OperationCanceledException)
                     {
 #if UNITY_EDITOR
-                        Debug.LogWarning($"<b>Sound Maneger:</b> Music loading was canceled: {path}");
+                        Debug.LogWarning($"[SoundManeger] Music loading was canceled: {path}");
 #endif
+                        return null;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[SoundManeger] Error loading music clip at {path}: {e.Message}");
                         return null;
                     }
                     finally
@@ -674,13 +753,23 @@ namespace Mane.SoundManeger
             
             try
             {
-                return await _musicLoader.GetMusicAsync(requester, path, token);
+                var clip = await _musicLoader.GetMusicAsync(requester, path, token);
+                
+                if (clip == null)
+                    Debug.LogError($"[SoundManeger] Failed to load SFX clip at path: {path}");
+                
+                return clip;
             }
             catch (OperationCanceledException)
             {
 #if UNITY_EDITOR
-                Debug.LogWarning($"<b>Sound Maneger:</b> SFX loading was canceled: {path}");
+                Debug.LogWarning($"[SoundManeger] SFX loading was canceled: {path}");
 #endif
+                return null;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[SoundManeger] Error loading SFX clip at {path}: {e.Message}");
                 return null;
             }
         }
