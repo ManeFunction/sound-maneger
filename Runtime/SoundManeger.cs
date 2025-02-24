@@ -83,7 +83,6 @@ namespace Mane.SoundManeger
         private List<string> _playlist;
         private int _playlistPointer;
         private MonoBehaviour _playlistOwner; 
-        private PlayMode _mode;
         private AudioClip _nextPlaylistTrack;
         private volatile int _modeFlags;
 
@@ -258,9 +257,9 @@ namespace Mane.SoundManeger
             set
             {
                 if (value)
-                    _mode &= ~PlayMode.PlayingMusic;
+                    RemoveMode(PlayMode.PlayingMusic);
                 else
-                    _mode |= PlayMode.PlayingMusic;
+                    AddMode(PlayMode.PlayingMusic);
 
                 _muteMusic = value;
                 SetVolume("BgmVolume", value ? 0 : _cachedBgmVolume);
@@ -387,7 +386,7 @@ namespace Mane.SoundManeger
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
-            _mode &= ~PlayMode.PlaylistActive;
+            RemoveMode(PlayMode.PlaylistActive);
             PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
             
@@ -525,7 +524,7 @@ namespace Mane.SoundManeger
 
                 _musicSource1.loop = false;
                 _musicSource2.loop = false;
-                _mode |= PlayMode.PlaylistActive;
+                AddMode(PlayMode.PlaylistActive);
 
                 // safe way to exclude double subscription
                 PlaylistTrackChange -= OnTrackChange;
@@ -695,7 +694,7 @@ namespace Mane.SoundManeger
                 if (_activeFirstMusicSource)
                 {
                     _musicSource2.clip = clip;
-                    if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    if (!GetMode().HasFlag(PlayMode.PlaylistActive))
                         _musicSource2.loop = true;
                     _musicSource2.Play();
                     _music2Snapshot.TransitionTo(_transitionTime);
@@ -707,7 +706,7 @@ namespace Mane.SoundManeger
                 else
                 {
                     _musicSource1.clip = clip;
-                    if (!_mode.HasFlag(PlayMode.PlaylistActive))
+                    if (!GetMode().HasFlag(PlayMode.PlaylistActive))
                         _musicSource1.loop = true;
                     _musicSource1.Play();
                     _music1Snapshot.TransitionTo(_transitionTime);
@@ -723,7 +722,7 @@ namespace Mane.SoundManeger
                 return;
             }
             
-            _mode |= PlayMode.PlayingMusic;
+            AddMode(PlayMode.PlayingMusic);
         }
 
         private IEnumerator StopMusicSource(AudioSource source, float delay)
