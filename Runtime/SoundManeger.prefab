@@ -33,6 +33,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
@@ -68,6 +69,10 @@ MonoBehaviour:
   _lowpassTime: 0.4
   _playlistPlayingOrder: 0
   _maxSameSoundsCount: 3
+  _continueAudioOnPause: 1
+  _sfxTimingsCleanupThreshold: 60
+  _maxConcurrentSfx: 100
+  _loadingTimeout: 30
 --- !u!82 &82330094734429888
 AudioSource:
   m_ObjectHideFlags: 0

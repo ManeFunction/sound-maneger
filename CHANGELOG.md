@@ -1,4 +1,4 @@
-1.6.0:
+1.6.0-preview.1:
     ! Package in a preview state due to significant changes requiring thorough testing.
     - Made SoundManager disposable.
     - Added separate option to pause music and SFX.
