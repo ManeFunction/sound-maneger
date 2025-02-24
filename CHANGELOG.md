@@ -4,6 +4,7 @@
     - Fixed possible memory leaks with SFX caching.
     - Fixed race conditions with SFX and playlist operations.
     - Simplified SFX caching logic with Queue instead of manually indexed list.
+    - Optimized SFX timings queue, added cleanup.
     - Drastically improved error handling and logging.
     - Increased minimum Unity version to 2021.2 because of new C# 9.0 features.
 
