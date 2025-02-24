@@ -98,7 +98,7 @@ namespace Mane.SoundManeger
         private readonly object _sfxTokenLock = new();
         private readonly ConcurrentBag<AudioClip> _activeSfx = new();
         private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
-        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new(100, 100); // Limit initial capacity
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new(100, 100);
 
         private float _lastCleanupTime;
 
@@ -553,16 +553,75 @@ namespace Mane.SoundManeger
                 OnTrackChange();
         }
 
+        private void PrepareNextTrack()
+        {
+            string trackPath = null;
+            lock (_playlistLock)
+            {
+                if (_playlist == null || _playlist.Count == 0) return;
+
+                if (_playlistPlayingOrder == PlayingOrder.Random)
+                {
+                    if (_playlist.Count == 1)
+                    {
+                        _playlistPointer = 0;
+                    }
+                    else
+                    {
+                        int old = _playlistPointer;
+                        do
+                        {
+                            _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
+                        } while (_playlistPointer == old);
+                    }
+                }
+                else
+                {
+                    _playlistPointer++;
+                    if (_playlistPointer >= _playlist.Count)
+                    {
+                        _playlistPointer = 0;
+                        if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
+                        {
+                            var lastTrack = _playlist.Last();
+                            do
+                            {
+                                _playlist.Shuffle();
+                            } while (_playlist.First() == lastTrack);
+                        }
+                    }
+                }
+
+                // Get the track path while still in the lock
+                trackPath = _playlist[_playlistPointer];
+            }
+
+            // Only proceed if we got a valid track path
+            if (!string.IsNullOrEmpty(trackPath))
+            {
+                var token = GetCancellationToken(true);
+                CacheNextTrack(token);
+            }
+        }
+
         private async void CacheNextTrack(CancellationToken token)
         {
+            MonoBehaviour owner;
             string trackPath;
+
+            // Get all needed data under lock
             lock (_playlistLock)
             {
                 if (_playlist == null || _playlist.Count == 0) return;
                 trackPath = _playlist[_playlistPointer];
+                owner = _playlistOwner;
             }
 
-            _nextPlaylistTrack = await GetClip(_playlistOwner, trackPath, true);
+            // Only proceed if we have valid data
+            if (!string.IsNullOrEmpty(trackPath) && owner != null)
+            {
+                _nextPlaylistTrack = await GetClip(owner, trackPath, true);
+            }
         }
 
         private async void OnTrackChange()
@@ -1012,48 +1071,6 @@ namespace Mane.SoundManeger
                 _sfxCancellationSource.Dispose();
             }
             _sfxCancellationSource = new UnityCancellationTokenSource();
-        }
-
-        private void PrepareNextTrack()
-        {
-            lock (_playlistLock)
-            {
-                if (_playlist == null || _playlist.Count == 0) return;
-
-                if (_playlistPlayingOrder == PlayingOrder.Random)
-                {
-                    if (_playlist.Count == 1)
-                    {
-                        _playlistPointer = 0;
-                    }
-                    else
-                    {
-                        int old = _playlistPointer;
-                        do
-                        {
-                            _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
-                        } while (_playlistPointer == old);
-                    }
-                }
-                else
-                {
-                    _playlistPointer++;
-                    if (_playlistPointer >= _playlist.Count)
-                    {
-                        _playlistPointer = 0;
-                        if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
-                        {
-                            var lastTrack = _playlist.Last();
-                            do
-                            {
-                                _playlist.Shuffle();
-                            } while (_playlist.First() == lastTrack);
-                        }
-                    }
-                }
-            }
-
-            CacheNextTrack(GetCancellationToken(true));
         }
 
         private PlayMode GetMode()
