@@ -3,8 +3,8 @@
   "version": "1.6.0-preview.1",
   "displayName": "Sound Maneger",
   "description": "Just a neat sound manager for Unity. Have separated channels, playlists, ducking and some other amazing features.",
-  "unity": "2019.1",
-  "unityRelease": "0b5",
+  "unity": "2021.2",
+  "unityRelease": "0f1",
   "keywords": [
     "unity",
     "sound",

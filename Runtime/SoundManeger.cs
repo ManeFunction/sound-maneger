@@ -62,8 +62,8 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music2LowSnapshot;
 
         private IMusicLoader _musicLoader;
-        private readonly SemaphoreSlim _musicLoadingSemaphore = new SemaphoreSlim(1, 1);
-        private readonly object _playlistLock = new object();
+        private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
+        private readonly object _playlistLock = new();
         private volatile bool _isMusicLoading;
         private UnityCancellationTokenSource _sfxCancellationSource;
         private UnityCancellationTokenSource _musicCancellationSource;
@@ -89,10 +89,10 @@ namespace Mane.SoundManeger
         private float _cachedSfxVolume = .8f;
 
         // used to keep active clips and prevent unloading while playing
-        private readonly object _sfxTokenLock = new object();
-        private readonly ConcurrentBag<AudioClip> _activeSfx = new ConcurrentBag<AudioClip>();
-        private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new ConcurrentDictionary<AudioClip, Coroutine>();
-        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new ConcurrentDictionary<string, ConcurrentQueue<float>>();
+        private readonly object _sfxTokenLock = new();
+        private readonly ConcurrentBag<AudioClip> _activeSfx = new();
+        private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new();
 
         private bool _isDisposed;
 
@@ -376,7 +376,7 @@ namespace Mane.SoundManeger
             }
 
             // playlist
-            List<string> pl = new List<string>(playlist);
+            List<string> pl = new(playlist);
             if (firstTrackIsIntro)
                 PlayMusic(await GetClip(owner, first, true));
             else
@@ -405,7 +405,7 @@ namespace Mane.SoundManeger
             }
             
             // playlist
-            List<string> pl = new List<string>(playlist);
+            List<string> pl = new(playlist);
             if (firstTrackIsIntro)
             {
                 PlayMusic(await GetClip(owner, pl[0], true));

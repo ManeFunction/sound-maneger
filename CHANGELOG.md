@@ -5,6 +5,7 @@
     - Fixed race conditions with SFX and playlist operations.
     - Simplified SFX caching logic with Queue instead of manually indexed list.
     - Drastically improved error handling and logging.
+    - Increased minimum Unity version to 2021.2 because of new C# 9.0 features.
 
 1.5.3:
     - Changed TaskCanceledException to OperationCanceledException on music loading to prevent uncontrolled exceptions flood.
