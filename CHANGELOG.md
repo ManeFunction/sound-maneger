@@ -1,3 +1,6 @@
+1.6.0-preview.2:
+    – Optimized while loop to singel Clear() call.
+
 1.6.0-preview.1:
     ! Package in a preview state due to significant changes requiring thorough testing.
     - Made SoundManager disposable.

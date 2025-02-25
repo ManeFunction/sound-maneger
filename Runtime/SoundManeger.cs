@@ -1020,9 +1020,7 @@ namespace Mane.SoundManeger
 
             // Enforce max concurrent SFX limit
             while (_activeSfx.Count > _maxConcurrentSfx)
-            {
                 _activeSfx.TryTake(out _);
-            }
         }
 
         protected virtual void OnDestroy() => Dispose();
@@ -1040,7 +1038,7 @@ namespace Mane.SoundManeger
             }
             _activeSfxCoroutines.Clear();
             
-            while (_activeSfx.TryTake(out _)) { }
+            _activeSfx.Clear();
             _limitedSfxTimings.Clear();
 
             _sfxCancellationSource?.Dispose();
