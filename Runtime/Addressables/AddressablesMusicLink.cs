@@ -1,13 +1,16 @@
 #if UNITY_ADDRESSABLES
 using UnityEngine;
-using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace Mane.SoundManeger
 {
+    public delegate void MusicLinkHandler(AsyncOperationHandle<AudioClip> musicHandler);
+
     public class AddressablesMusicLink : MonoBehaviour
     {
         private AsyncOperationHandle<AudioClip> _handler;
+
+        public event MusicLinkHandler ShouldReleaseHandler;
         
         /// <summary>
         /// Music clip from the handler or null if the handler is invalid or empty.
@@ -20,27 +23,11 @@ namespace Mane.SoundManeger
         /// <param name="musicHandler">New music handler.</param>
         public void Bind(AsyncOperationHandle<AudioClip> musicHandler)
         {
-            ReleaseInternal();
+            ShouldReleaseHandler?.Invoke(_handler);
             _handler = musicHandler;
         }
-        
-        /// <summary>
-        /// Release music handler and destroys the link itself.
-        /// </summary>
-        [ContextMenu("Release")]
-        public void Release()
-        {
-            ReleaseInternal();
-            Destroy(this);
-        }
-        
-        private void ReleaseInternal()
-        {
-            if (_handler.IsValid())
-                Addressables.Release(_handler);
-        }
 
-        private void OnDestroy() => Release();
+        private void OnDestroy() => ShouldReleaseHandler?.Invoke(_handler);
     }
 }
 #endif

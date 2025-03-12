@@ -12,13 +12,10 @@ namespace Mane.SoundManeger
 {
     public class AddressablesMusicLoader : IMusicLoader
     {
-        private readonly float _repeatDelay;
-
         /// <summary>
-        /// Creates AddressablesMusicLoader
+        /// Addressables loader should retry as asset loading can fail temporarily
         /// </summary>
-        /// <param name="repeatDelay">Delay before repeat loading if loading failed</param>
-        public AddressablesMusicLoader(float repeatDelay = 5f) => _repeatDelay = repeatDelay;
+        public bool ShouldRetry => true;
 
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
@@ -55,22 +52,20 @@ namespace Mane.SoundManeger
             AsyncOperationHandle<AudioClip> handle = default;
             if (!handle.IsValid())
             {
-                while (true)
+                handle = Addressables.LoadAssetAsync<AudioClip>(path);
+                yield return handle;
+                
+                if (token.IsCancellationRequested)
                 {
-                    handle = Addressables.LoadAssetAsync<AudioClip>(path);
-                    yield return handle;
-                    
-                    if (token.IsCancellationRequested)
-                    {
-                        callback?.Invoke(null);
-                        yield break;
-                    }
-                    
-                    if (handle.Status == AsyncOperationStatus.Succeeded)
-                        break;
+                    callback?.Invoke(null);
+                    yield break;
+                }
+                
+                if (handle.Status != AsyncOperationStatus.Succeeded)
+                {
                     Addressables.Release(handle);
-                    
-                    yield return new WaitForSecondsRealtime(_repeatDelay);
+                    callback?.Invoke(null);
+                    yield break;
                 }
             }
 
@@ -82,9 +77,20 @@ namespace Mane.SoundManeger
             
             var links = owner.GetComponents<AddressablesMusicLink>();
             AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
-            if (!link) link = owner.gameObject.AddComponent<AddressablesMusicLink>();
+            if (!link)
+            {
+                link = owner.gameObject.AddComponent<AddressablesMusicLink>();
+                link.ShouldReleaseHandler += OnShouldReleaseHandler;
+            }
+
             link.Bind(handle);
             callback?.Invoke(handle.Result);
+        }
+
+        private void OnShouldReleaseHandler(AsyncOperationHandle<AudioClip> handler)
+        {
+            if (handler.IsValid())
+                Addressables.Release(handler);
         }
     }
 }

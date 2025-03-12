@@ -1,3 +1,7 @@
+1.6.0-preview.4:
+    - Moved 'retry loading with delay' feature from AddressablesMusicLoader to the SoundManeger itself, so any IMusicLoader can utilize this feature.
+    - Moved asset handler releasing code from Link to a Loader, so any IMusicLoader can manage handler releasing itself.
+
 1.6.0-preview.2:
     – Optimized while loop to singel Clear() call.
 
