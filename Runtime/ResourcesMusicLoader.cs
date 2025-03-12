@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -7,57 +8,47 @@ namespace Mane.SoundManeger
 {
     public class ResourcesMusicLoader : IMusicLoader
     {
-        /// <summary>
-        /// Resources loads should not be retried as failures are generally permanent.
-        /// </summary>
-        public bool ShouldRetry => false;
-
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
-            if (string.IsNullOrEmpty(path)) 
-                return null;
+            if (string.IsNullOrEmpty(path)) return null;
             
-            if (owner == null)
-                owner = SoundManeger.Instance;
+            owner ??= SoundManeger.Instance;
             
-            try 
+            AudioClip result = null;
+            Coroutine coroutine = owner.StartCoroutine(GetMusicCoroutine(path, OnClipLoaded, token));
+            while (coroutine != null)
             {
-                // Create a TaskCompletionSource to convert Unity's async operation to Task
-                var tcs = new TaskCompletionSource<AudioClip>();
-                
-                var request = Resources.LoadAsync<AudioClip>(path);
-                
-                request.completed += operation => 
+                if (token.IsCancellationRequested)
                 {
-                    if (token.IsCancellationRequested)
-                    {
-                        tcs.TrySetCanceled(token);
-                        return;
-                    }
-                    
-                    var resourceRequest = operation as ResourceRequest;
-                    var clip = resourceRequest?.asset as AudioClip;
-                    if (clip != null)
-                        tcs.TrySetResult(clip);
-                    else
-                        tcs.TrySetResult(null);
-                };
-                
-                // Setup cancellation token to cancel the operation if needed
-                using (token.Register(() => tcs.TrySetCanceled()))
-                {
-                    return await tcs.Task;
+                    owner.StopCoroutine(coroutine);
+                    coroutine = null;
                 }
+                
+                await Task.Yield();
             }
-            catch (OperationCanceledException)
+
+            return result;
+
+            
+            void OnClipLoaded(AudioClip clip)
             {
-                return null;
+                result = clip;
+                coroutine = null;
             }
-            catch (Exception ex)
+        }
+        
+        private IEnumerator GetMusicCoroutine(string path, Action<AudioClip> callback, CancellationToken token)
+        {
+            var request = Resources.LoadAsync<AudioClip>(path);
+            yield return request;
+
+            if (token.IsCancellationRequested)
             {
-                Debug.LogError($"[ResourcesMusicLoader] Error loading {path}: {ex.Message}");
-                return null;
+                callback?.Invoke(null);
+                yield break;
             }
+            
+            callback?.Invoke((AudioClip)request.asset);
         }
     }
 }

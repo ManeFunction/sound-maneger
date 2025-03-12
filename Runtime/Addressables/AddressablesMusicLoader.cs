@@ -1,5 +1,7 @@
 #if UNITY_ADDRESSABLES
 using System;
+using System.Collections;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -8,123 +10,81 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace Mane.SoundManeger
 {
-    internal static class TaskExtensions
-    {
-        public static async Task WithCancellation(this Task task, CancellationToken cancellationToken)
-        {
-            var tcs = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
-            {
-                if (task.IsCompleted || await Task.WhenAny(task, tcs.Task) != tcs.Task)
-                    await task;
-                else
-                    throw new OperationCanceledException(cancellationToken);
-            }
-        }
-    }
-
     public class AddressablesMusicLoader : IMusicLoader
     {
-        // Track loaded assets to prevent them from being unloaded while in use
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, AsyncOperationHandle<AudioClip>> _loadedAssets = 
-            new System.Collections.Concurrent.ConcurrentDictionary<string, AsyncOperationHandle<AudioClip>>();
+        private readonly float _repeatDelay;
 
         /// <summary>
-        /// Creates a new AddressablesMusicLoader instance.
+        /// Creates AddressablesMusicLoader
         /// </summary>
-        public AddressablesMusicLoader() { }
-
-        /// <summary>
-        /// Addressable loads should be retried as failures might be due to transient network issues.
-        /// </summary>
-        public bool ShouldRetry => true;
+        /// <param name="repeatDelay">Delay before repeat loading if loading failed</param>
+        public AddressablesMusicLoader(float repeatDelay = 5f) => _repeatDelay = repeatDelay;
 
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
-            if (string.IsNullOrEmpty(path))
-                return null;
+            if (string.IsNullOrEmpty(path)) return null;
             
-            if (!owner)
-                owner = SoundManeger.Instance;
+            if (!owner) owner = SoundManeger.Instance;
             
-            // Check if we already have the asset loaded
-            if (_loadedAssets.TryGetValue(path, out var existingHandle) && existingHandle.IsValid())
+            AudioClip result = null;
+            Coroutine coroutine = owner.StartCoroutine(GetMusicCoroutine(owner, path, OnClipLoaded, token));
+            while (coroutine != null)
             {
-                // If handle is valid but still in progress, await it
-                if (existingHandle.Status == AsyncOperationStatus.None)
+                if (token.IsCancellationRequested)
                 {
-                    try
-                    {
-                        // Create a cancellation task
-                        var tcs = new TaskCompletionSource<bool>();
-                        using (token.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
-                        {
-                            if (await Task.WhenAny(existingHandle.Task, tcs.Task) == tcs.Task)
-                                throw new OperationCanceledException(token);
-                            
-                            await existingHandle.Task;
-                        }
-                        
-                        return existingHandle.Status == AsyncOperationStatus.Succeeded ? existingHandle.Result : null;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return null;
-                    }
+                    owner.StopCoroutine(coroutine);
+                    coroutine = null;
                 }
                 
-                // Handle is valid and completed
-                return existingHandle.Status == AsyncOperationStatus.Succeeded ? existingHandle.Result : null;
+                await Task.Yield();
             }
+
+            return result;
+
             
-            // Start new loading operation
-            try
+            void OnClipLoaded(AudioClip clip)
             {
-                AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(path);
-                
-                // Register the handle for tracking before awaiting
-                _loadedAssets[path] = handle;
-                
-                // Wait for completion with cancellation support
-                var tcs = new TaskCompletionSource<bool>();
-                using (token.Register(s => ((TaskCompletionSource<bool>)s).TrySetResult(true), tcs))
+                result = clip;
+                coroutine = null;
+            }
+        }
+        
+        private IEnumerator GetMusicCoroutine(MonoBehaviour owner, string path, Action<AudioClip> callback,
+            CancellationToken token)
+        {
+            AsyncOperationHandle<AudioClip> handle = default;
+            if (!handle.IsValid())
+            {
+                while (true)
                 {
-                    if (await Task.WhenAny(handle.Task, tcs.Task) == tcs.Task)
-                        throw new OperationCanceledException(token);
+                    handle = Addressables.LoadAssetAsync<AudioClip>(path);
+                    yield return handle;
                     
-                    await handle.Task;
-                }
-                
-                // If loading failed, remove the handle from tracked assets
-                if (handle.Status != AsyncOperationStatus.Succeeded)
-                {
-                    _loadedAssets.TryRemove(path, out _);
+                    if (token.IsCancellationRequested)
+                    {
+                        callback?.Invoke(null);
+                        yield break;
+                    }
+                    
+                    if (handle.Status == AsyncOperationStatus.Succeeded)
+                        break;
                     Addressables.Release(handle);
-                    return null;
+                    
+                    yield return new WaitForSecondsRealtime(_repeatDelay);
                 }
-                
-                return handle.Result;
             }
-            catch (OperationCanceledException)
+
+            if (!owner)
             {
-                // Cleanup on cancellation
-                if (_loadedAssets.TryRemove(path, out var handle) && handle.IsValid())
-                {
-                    Addressables.Release(handle);
-                }
-                return null;
+                callback?.Invoke(null);
+                yield break;
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[AddressablesMusicLoader] Error loading {path}: {ex.Message}");
-                
-                // Cleanup on error
-                if (_loadedAssets.TryRemove(path, out var handle) && handle.IsValid())
-                {
-                    Addressables.Release(handle);
-                }
-                return null;
-            }
+            
+            var links = owner.GetComponents<AddressablesMusicLink>();
+            AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
+            if (!link) link = owner.gameObject.AddComponent<AddressablesMusicLink>();
+            link.Bind(handle);
+            callback?.Invoke(handle.Result);
         }
     }
 }

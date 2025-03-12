@@ -1,7 +1,3 @@
-1.6.0-preview.3:
-    - Moved a 'delay on error' feature to the SoundManeger itself to allow any IMusicLoader use it.
-    - Moved loading system from coroutines to async/await pattern, allowing to get rid of additional components.
-
 1.6.0-preview.2:
     – Optimized while loop to singel Clear() call.
 

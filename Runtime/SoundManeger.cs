@@ -61,8 +61,6 @@ namespace Mane.SoundManeger
         [SerializeField] private float _sfxTimingsCleanupThreshold = 60f;
         [SerializeField] private int _maxConcurrentSfx = 100;
         [SerializeField] private float _loadingTimeout = 30f;
-        [Tooltip("Time in seconds to wait before retrying a failed load operation.")]
-        [SerializeField] private float _loadingRepeatDelay = 5f;
 
         
         private AudioMixerSnapshot _music1Snapshot;
@@ -128,15 +126,6 @@ namespace Mane.SoundManeger
         {
             get => AudioListener.pause;
             set => AudioListener.pause = value;
-        }
-
-        /// <summary>
-        /// Time in seconds to wait before retrying a failed load operation.
-        /// </summary>
-        public float LoadingRepeatDelay
-        {
-            get => _loadingRepeatDelay;
-            set => _loadingRepeatDelay = Mathf.Max(.1f, value);
         }
 
         protected override void Awake()
@@ -839,27 +828,9 @@ namespace Mane.SoundManeger
                                 _musicCancellationSource = null;
                             }
 
-                            AudioClip clip = null;
-                            var token = GetCancellationToken(true);
-                            bool isMusicLoadRetrying = false;
+                            var clip = await _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(true));
                             
-                            while (clip == null && !token.IsCancellationRequested)
-                            {
-                                if (isMusicLoadRetrying)
-                                {
-                                    if (!_musicLoader.ShouldRetry)
-                                        break;
-                                
-                                    Debug.LogWarning($"[SoundManeger] Retrying music load: {path}");
-                                    await Task.Delay(TimeSpan.FromSeconds(_loadingRepeatDelay), token);
-                                    if (token.IsCancellationRequested) break;
-                                }
-                                
-                                clip = await _musicLoader.GetMusicAsync(requester, path, token);
-                                isMusicLoadRetrying = true;
-                            }
-                            
-                            if (clip == null && !token.IsCancellationRequested)
+                            if (clip == null)
                                 Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
                             
                             return clip;
@@ -876,32 +847,15 @@ namespace Mane.SoundManeger
                 }
                 
                 // For SFX, we only need to protect token creation/disposal
-                CancellationToken sfxToken;
+                CancellationToken token;
                 lock (_sfxTokenLock)
                 {
-                    sfxToken = GetCancellationToken(false);
+                    token = GetCancellationToken(false);
                 }
                 
-                AudioClip sfxClip = null;
-                bool isSfxLoadRetrying = false;
+                var sfxClip = await _musicLoader.GetMusicAsync(requester, path, token);
                 
-                while (sfxClip == null && !sfxToken.IsCancellationRequested)
-                {
-                    if (isSfxLoadRetrying)
-                    {
-                        if (!_musicLoader.ShouldRetry)
-                            break;
-                    
-                        Debug.LogWarning($"[SoundManeger] Retrying SFX load: {path}");
-                        await Task.Delay(TimeSpan.FromSeconds(_loadingRepeatDelay), sfxToken);
-                        if (sfxToken.IsCancellationRequested) break;
-                    }
-                    
-                    sfxClip = await _musicLoader.GetMusicAsync(requester, path, sfxToken);
-                    isSfxLoadRetrying = true;
-                }
-                
-                if (sfxClip == null && !sfxToken.IsCancellationRequested)
+                if (sfxClip == null)
                     Debug.LogError($"[SoundManeger] Failed to load SFX clip at path: {path}");
                 
                 return sfxClip;
