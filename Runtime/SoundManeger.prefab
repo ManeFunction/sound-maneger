@@ -73,6 +73,7 @@ MonoBehaviour:
   _sfxTimingsCleanupThreshold: 60
   _maxConcurrentSfx: 100
   _loadingTimeout: 30
+  _loadingRepeatDelay: 5
 --- !u!82 &82330094734429888
 AudioSource:
   m_ObjectHideFlags: 0
