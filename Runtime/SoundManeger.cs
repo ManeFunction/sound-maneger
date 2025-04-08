@@ -794,7 +794,7 @@ namespace Mane.SoundManeger
             _transitionAwaiter = null;
         }
         
-        private async Task<AudioClip> GetClip(MonoBehaviour requester, string path, bool isMusic)
+        private async Task<AudioClip> GetClip(MonoBehaviour owner, string path, bool isMusic)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -807,6 +807,9 @@ namespace Mane.SoundManeger
                 Debug.LogWarning("[SoundManeger] Attempted to load clip after disposal!");
                 return null;
             }
+
+            if (owner == null)
+                owner = this;
 
             try
             {
@@ -835,7 +838,7 @@ namespace Mane.SoundManeger
                             
                             do
                             {
-                                clip = await _musicLoader.GetMusicAsync(requester, path, GetCancellationToken(true));
+                                clip = await _musicLoader.GetMusicAsync(owner, path, GetCancellationToken(true));
                                 
                                 if (clip != null || !shouldRetry)
                                     break;
@@ -873,7 +876,7 @@ namespace Mane.SoundManeger
                 
                 do
                 {
-                    sfxClip = await _musicLoader.GetMusicAsync(requester, path, token);
+                    sfxClip = await _musicLoader.GetMusicAsync(owner, path, token);
                     
                     if (sfxClip != null || !shouldRetrySfx)
                         break;

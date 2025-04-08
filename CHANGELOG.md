@@ -1,19 +1,15 @@
-1.6.0-preview.4:
+1.6.1:
+    - Made SoundManager disposable.
     - Moved 'retry loading with delay' feature from AddressablesMusicLoader to the SoundManeger itself, so any IMusicLoader can utilize this feature.
     - Moved asset handler releasing code from Link to a Loader, so any IMusicLoader can manage handler releasing itself.
-
-1.6.0-preview.2:
-    – Optimized while loop to singel Clear() call.
-
-1.6.0-preview.1:
-    ! Package in a preview state due to significant changes requiring thorough testing.
-    - Made SoundManager disposable.
     - Added separate option to pause music and SFX.
     - Fixed possible memory leaks with SFX caching.
     - Fixed race conditions with SFX and playlist operations.
     - Simplified SFX caching logic with Queue instead of manually indexed list.
     - Optimized SFX timings queue, added cleanup.
     - Drastically improved error handling and logging.
+    – Optimized while loop to singel Clear() call.
+    - Fixed an issue when owner in IMusicLoader.GetMusicAsync() could be null.
     - Increased minimum Unity version to 2021.2 because of new C# 9.0 features.
 
 1.5.3:
