@@ -1124,12 +1124,15 @@ namespace Mane.Unity.SoundManeger
             _playingSfx.Clear();
             _limitedSfxTimings.Clear();
 
+            // Disposing a token source does not cancel it, so pending loads are canceled first
+            _sfxCancellationSource?.Cancel();
             _sfxCancellationSource?.Dispose();
-            _musicCancellationSource?.Dispose();
             _sfxCancellationSource = null;
-            _musicCancellationSource = null;
-            _musicLoadingSemaphore.Dispose();
+            CancelMusicLoading();
+            // The semaphore is not disposed: canceled loads still release it when they finish
 
+            SetMode(PlayMode.Silence);
+            PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
         }
 

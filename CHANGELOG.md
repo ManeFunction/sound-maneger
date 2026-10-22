@@ -45,6 +45,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - `AddressablesMusicLoader` had the same never-finishing load when its owner was destroyed or deactivated. It also never released the asset of a load that was canceled, or whose owner was destroyed before the load finished, so those clips stayed in memory. They are released now.
 - Without a mixer (or with one that has no music snapshots, which disables it), the volume, mute and mixer group properties threw `NullReferenceException`, and a mixer group property threw `InvalidOperationException` when the mixer had no such group. The group properties return null now, and the volumes read 0.
 - `BgmVolume` and `SfxVolume` read 0 while the music or SFX were muted, so a settings screen that read the volume and wrote it back lost it. They now return the volume you set, and the volume restored on unmute starts from the mixer instead of assuming 0 dB.
+- `Dispose` disposed the loading token sources without canceling them, so pending loads kept going, and it disposed the music loading lock while loads still used it, which logged errors when the manager was destroyed mid-load. It also left the playlist running for a manager that was disposed but not destroyed. Pending loads are canceled now and the playlist stops.
 
 ## [1.6.1] - 2025-04-08
 ### Added
