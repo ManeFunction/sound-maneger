@@ -63,7 +63,7 @@ namespace Mane.Unity.SoundManeger
         [Tooltip("How many different sound effect clips are protected from unloading while they play.")]
         [SerializeField] private int _maxConcurrentSfx = 100;
         [SerializeField] private float _loadingTimeout = 30f;
-        [Tooltip("Delay in seconds before retrying loading if it failed. Only applies to loaders that support retrying.")]
+        [Tooltip("Delay in seconds before retrying music loading if it failed. Only applies to loaders that support retrying.")]
         [SerializeField] private float _musicRetryDelay = 5f;
 
         
@@ -978,22 +978,10 @@ namespace Mane.Unity.SoundManeger
                     token = GetCancellationToken(false);
                 }
                 
-                AudioClip sfxClip = null;
-                bool shouldRetrySfx = _musicLoader.ShouldRetry;
-                
-                do
-                {
-                    sfxClip = await _musicLoader.GetMusicAsync(owner, path, token);
-                    
-                    if (sfxClip != null || !shouldRetrySfx)
-                        break;
-                    
-                    Debug.LogWarning($"[SoundManeger] Failed to load SFX, retrying after {_musicRetryDelay} seconds: {path}");
-                    await Task.Delay(TimeSpan.FromSeconds(_musicRetryDelay), token);
-                    
-                } while (!_isDisposed);
-                
-                if (sfxClip == null)
+                // No retries: a sound effect or voice line played seconds late is worse than none
+                AudioClip sfxClip = await _musicLoader.GetMusicAsync(owner, path, token);
+
+                if (sfxClip == null && !token.IsCancellationRequested)
                     Debug.LogError($"[SoundManeger] Failed to load SFX clip at path: {path}");
                 
                 return sfxClip;

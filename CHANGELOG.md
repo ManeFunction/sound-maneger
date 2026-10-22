@@ -40,6 +40,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - When the intro of a playlist failed to load, the playlist waited for a track that was not playing and never started. It now starts at once.
 - A playlist track that failed to load with a loader that does not retry (such as `ResourcesMusicLoader`) was loaded again every frame, flooding the Console with errors, and the playlist never moved on. If nothing was playing before the playlist started, it was stuck silently instead. Such a track is now skipped, and when none of the tracks can be loaded, the playlist stops with one error.
 - With a null playlist owner (the docs say the manager is used then) or an owner that was destroyed, the next playlist track was never preloaded, so there was a gap between tracks.
+- With a retrying loader (`AddressablesMusicLoader`), a sound effect or voice clip that failed to load was retried forever: every failed `PlaySfx` call started its own endless retry loop, and the sound played late if it ever loaded. Only music is retried now.
 
 ## [1.6.1] - 2025-04-08
 ### Added
