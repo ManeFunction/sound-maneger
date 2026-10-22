@@ -1,94 +1,158 @@
-1.6.1:
-    - Made SoundManager disposable.
-    - Moved 'retry loading with delay' feature from AddressablesMusicLoader to the SoundManeger itself, so any IMusicLoader can utilize this feature.
-    - Moved asset handler releasing code from Link to a Loader, so any IMusicLoader can manage handler releasing itself.
-    - Added separate option to pause music and SFX.
-    - Fixed possible memory leaks with SFX caching.
-    - Fixed race conditions with SFX and playlist operations.
-    - Simplified SFX caching logic with Queue instead of manually indexed list.
-    - Optimized SFX timings queue, added cleanup.
-    - Drastically improved error handling and logging.
-    – Optimized while loop to singel Clear() call.
-    - Fixed an issue when owner in IMusicLoader.GetMusicAsync() could be null.
-    - Increased minimum Unity version to 2021.2 because of new C# 9.0 features.
+# Changelog
 
-1.5.3:
-    - Changed TaskCanceledException to OperationCanceledException on music loading to prevent uncontrolled exceptions flood.
+All notable changes to this project will be documented in this file.
 
-1.5.2:
-    - Fixed an issue when SFX downloads can be cancelled with some Music tracks.
+The format is based on [Keep a Changelog](https://keepachangelog.com/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
-1.5.0:
-    - Added support of Cancellation Token when loading music.
-    - Fixed some issues with playlists.
+## [Unreleased]
 
-1.4.9:
-    - Additional fix for game pause and SFX playing.
+## [2.0.0-preview.1] - 2026-10-22
+Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git) replace the legacy `ManeUtils` dependency. Versioning jumps to 2.0.0 to match the rest of my packages (see my [GitHub](https://github.com/ManeFunction) for more useful Unity tools).
 
-1.4.8:
-    - Replaced WaitForSeconds to WaitForSecondsRealtime for proper work with game pause and other time magic.
+### Added
+- Added dependencies to [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git).
+- The inspector uses the `ManeStyle` layout from ManeTools-Unity.
 
-1.4.7:
-    - Do not try to load music via empty string anymore. 
+### Changed
+- BREAKING CHANGE: Namespace was changed from `Mane.SoundManeger` to `Mane.Unity.SoundManeger`.
+- BREAKING CHANGE: The assembly was renamed from `Mane.SoundManeger` to `manefunction.sound-maneger`. Assembly definitions that reference it by GUID keep working; references by name need the new name.
+- `SoundManeger` is now a `UnitySingleton` from ManeTools-Unity instead of the legacy `MonoSingleton`. A manager in a scene that is loaded again destroys its own GameObject, and the first one keeps playing.
+- Moved context "Add component" menu to `Mane Tools -> Audio -> Sound Maneger`.
+- Shuffle and random playlist orders use the manager's own random source (`ManeRandom` from ManeTools-dotNET), so they no longer change the state of `UnityEngine.Random`.
+- `UnityCancellationTokenSource` (internal) moved out of the `Addressables` folder, because it is not Addressables-specific.
 
-1.4.5:
-    - Added AddressableMusicLink component to allow assets releasing on owner object destroy.
-    - Fixed some issues with new playlist modes.
-    - Fixed an issue with tracks changing in some playlists.
+### Removed
+- Removed the legacy `com.manefunction.utils` dependency.
+- Removed support for Unity versions older than the latest patch of the earliest Unity 6 LTS (6.0.81).
 
-1.4.0:
-    - All music loading is now async.
-    - Added ResourcesMusicLoader to load music from Resources folder.
-    - Added AddressablesMusicLoader to load music from Addressables.
-    - Added IMusicLoader interface to allow custom music loading.
-    - Added feature to preload next music track when using playlist.
-    - Added feature to start playlist with an opening track that play only once.
-    - Added a lot of documentation summary notes.
+## [1.6.1] - 2025-04-08
+### Added
+- Made `SoundManeger` disposable.
+- Added separate options to pause music and SFX.
 
-1.3.2:
-    - Updated Mane Tools dependency to 1.10.22.
+### Changed
+- Moved the 'retry loading with delay' feature from `AddressablesMusicLoader` to the `SoundManeger` itself, so any `IMusicLoader` can use it.
+- Moved the asset handle releasing code from the link to the loader, so any `IMusicLoader` can release its handles itself.
+- Simplified the SFX caching logic with a `Queue` instead of a manually indexed list.
+- Optimized the SFX timings queue and added a cleanup.
+- Drastically improved error handling and logging.
+- Optimized a `while` loop to a single `Clear()` call.
+- Increased the minimum Unity version to 2021.2 because of new C# 9.0 features.
 
-1.3.1:
-    - Sound Maneger component was placed under the Audio menu.
+### Fixed
+- Fixed possible memory leaks with SFX caching.
+- Fixed race conditions with SFX and playlist operations.
+- Fixed an issue when `owner` in `IMusicLoader.GetMusicAsync()` could be null.
 
-1.3.0:
-    - Shuffled mode now shuffles the playlist after each cycle.
-    - Added PlayMusic() overloads that allow to set a playing order.
+## [1.5.3] - 2024-06-12
+### Changed
+- Changed `TaskCanceledException` to `OperationCanceledException` on music loading to prevent an uncontrolled exceptions flood.
 
-1.2.1:
-    - Reserealize main prefab to prevent it's constant changing in target projects.
+## [1.5.2] - 2024-06-04
+### Fixed
+- Fixed an issue when SFX downloads could be cancelled with some music tracks.
 
-1.2.0:
-    - Improved same SFX suppression. Now it depends on the SFX length, and you control how many SFX you allow simultaneously.
+## [1.5.0] - 2024-06-04
+### Added
+- Added support of a cancellation token when loading music.
 
-1.1.5:
-    - Fixed an issue caused music change in some cases if you are playing a single track after a playlist.
+### Fixed
+- Fixed some issues with playlists.
 
-1.1.4:
-    - Fixed an issue that prevent playlist song changing.
-    - Fixed an issue that brake the right playlist order after the second PlayMusic execution.
+## [1.4.9] - 2024-02-01
+### Fixed
+- Additional fix for game pause and SFX playing.
 
-1.1.3:
-    - Fixed broken dependencies by the last commit, upped again to 1.6.0.
+## [1.4.8] - 2024-01-09
+### Changed
+- Replaced `WaitForSeconds` with `WaitForSecondsRealtime` for proper work with game pause and other time magic.
 
-1.1.2:
-    - Fixed Mane Tools dependencies, updated to the latest at the time (1.5.38).
+## [1.4.7] - 2023-12-13
+### Fixed
+- Music is not loaded via an empty string anymore.
 
-1.1.1:
-    - Added code to access default AudioListener.
+## [1.4.5] - 2023-12-07
+### Added
+- Added `AddressablesMusicLink` component to allow assets releasing on owner object destroy.
 
-1.1.0:
-    - Added exposed properties for different audio channels and a Mixer.
-    - Added custom music channel to connect your own music audio sources.
+### Fixed
+- Fixed some issues with the new playlist modes.
+- Fixed an issue with tracks changing in some playlists.
 
-1.0.6:
-    - Reserealized assets.
+## [1.4.0] - 2023-12-07
+### Added
+- Added `ResourcesMusicLoader` to load music from the `Resources` folder.
+- Added `AddressablesMusicLoader` to load music from Addressables.
+- Added `IMusicLoader` interface to allow custom music loading.
+- Added a feature to preload the next music track when using a playlist.
+- Added a feature to start a playlist with an opening track that plays only once.
+- Added a lot of documentation summary notes.
 
-1.0.5:
-    - Updated some Mane dependencies to made Sound Manager compatible with Utils 1.4.3 and higher.
+### Changed
+- All music loading is now async.
 
-1.0.4:
-    - Added npm packages.
+## [1.3.2] - 2023-12-01
+### Changed
+- Updated Mane Tools dependency to 1.10.22.
 
-1.0.3:
-    - Count this as an init public version of this tool :)
+## [1.3.1] - 2023-07-11
+### Changed
+- Sound Maneger component was placed under the `Audio` menu.
+
+## [1.3.0] - 2023-04-19
+### Added
+- Added `PlayMusic()` overloads that allow to set a playing order.
+
+### Changed
+- Shuffled mode now shuffles the playlist after each cycle.
+
+## [1.2.1] - 2022-10-19
+### Changed
+- Reserialized the main prefab to prevent its constant changing in target projects.
+
+## [1.2.0] - 2022-10-19
+### Changed
+- Improved same SFX suppression. Now it depends on the SFX length, and you control how many SFX you allow simultaneously.
+
+## [1.1.5] - 2022-03-15
+### Fixed
+- Fixed an issue that caused a music change in some cases, if you play a single track after a playlist.
+
+## [1.1.4] - 2022-01-22
+### Fixed
+- Fixed an issue that prevented playlist song changing.
+- Fixed an issue that broke the right playlist order after the second `PlayMusic` execution.
+
+## [1.1.3] - 2022-01-19
+### Fixed
+- Fixed dependencies broken by the last commit, upped Mane Tools again to 1.6.0.
+
+## [1.1.2] - 2022-01-19
+### Fixed
+- Fixed Mane Tools dependencies, updated to the latest at the time (1.5.38).
+
+## [1.1.1] - 2021-10-15
+### Added
+- Added code to access the default `AudioListener`.
+
+## [1.1.0] - 2021-10-14
+### Added
+- Added exposed properties for different audio channels and a mixer.
+- Added a custom music channel to connect your own music audio sources.
+
+## [1.0.6] - 2021-04-02
+### Changed
+- Reserialized assets.
+
+## [1.0.5] - 2021-03-30
+### Changed
+- Updated some Mane dependencies to make Sound Maneger compatible with Utils 1.4.3 and higher.
+
+## [1.0.4] - 2020-08-17
+### Added
+- Added npm packages.
+
+## [1.0.3] - 2020-03-25
+### Added
+- Count this as an init public version of this tool :)
