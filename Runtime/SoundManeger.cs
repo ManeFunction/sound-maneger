@@ -757,12 +757,10 @@ namespace Mane.Unity.SoundManeger
         {
             if (_mixer == null || clip == null) return;
 
+            // The clip already plays on the active source: keep it playing
             if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
                 _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
-            {
-                _activeFirstMusicSource = !_activeFirstMusicSource;
                 return;
-            }
 
             try
             {
