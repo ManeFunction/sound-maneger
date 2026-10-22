@@ -2,24 +2,35 @@
   "name": "com.manefunction.sound-maneger",
   "version": "2.0.0-preview.1",
   "displayName": "Sound Maneger",
-  "description": "Just a neat sound manager for Unity. Have separated channels, playlists, ducking and some other amazing features.",
+  "description": "Just a neat sound manager for Unity: separate music and SFX channels, crossfaded playlists, ducking, and async clip loading from Resources or Addressables.\n\nDrop the 'SoundManeger' prefab into your first scene, or find the component in 'Add Component -> Mane Tools -> Audio -> Sound Maneger'.",
   "unity": "6000.0",
   "unityRelease": "81f1",
-  "keywords": [
-    "unity",
-    "sound",
-    "music",
-    "audio",
-    "manefunction"
-  ],
-  "author": {
-    "name": "Mane Function",
-    "email": "manework@outlook.com",
-    "url": "https://github.com/ManeFunction"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ManeFunction/sound-maneger.git"
   },
   "dependencies": {
     "com.unity.modules.audio": "1.0.0",
     "com.manefunction.tools-dotnet": "2.0.0-preview.2",
     "com.manefunction.tools-unity": "2.0.0-preview.1"
+  },
+  "keywords": [
+    "unity",
+    "sound",
+    "music",
+    "audio",
+    "sfx",
+    "playlist",
+    "mixer",
+    "manefunction"
+  ],
+  "author": {
+    "name": "Ilia Petrov-Komotskii (Mane Function)",
+    "email": "ilia@inkedkettle.games",
+    "url": "https://github.com/ManeFunction"
+  },
+  "publishConfig": {
+    "registry": "https://package.openupm.com"
   }
 }
