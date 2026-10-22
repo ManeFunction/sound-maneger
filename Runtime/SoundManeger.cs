@@ -578,7 +578,7 @@ namespace Mane.Unity.SoundManeger
             lock (_playlistLock)
             {
                 _playlist = new List<string>(playlist); // Create defensive copy
-                _playlistOwner = owner;
+                _playlistOwner = owner != null ? owner : this;
                 _nextPlaylistTrack = null;
                 _failedPlaylistTracks = 0;
 
@@ -703,8 +703,8 @@ namespace Mane.Unity.SoundManeger
                 owner = _playlistOwner;
             }
 
-            // Only proceed if we have valid data
-            if (!string.IsNullOrEmpty(trackPath) && owner != null)
+            // Only proceed if we have valid data (GetClip() replaces a destroyed owner with the manager)
+            if (!string.IsNullOrEmpty(trackPath))
             {
                 AudioClip clip = await GetClip(owner, trackPath, true);
                 if (request == _musicRequest)
