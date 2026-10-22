@@ -44,6 +44,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - `ResourcesMusicLoader` never finished a load whose owner was destroyed or deactivated while loading, because the loading coroutine ran on the owner and stopped with it. The load kept the music loading lock, so every later music load timed out. The loader no longer needs the owner, and its `??=` that missed destroyed owners is gone with it.
 - `AddressablesMusicLoader` had the same never-finishing load when its owner was destroyed or deactivated. It also never released the asset of a load that was canceled, or whose owner was destroyed before the load finished, so those clips stayed in memory. They are released now.
 - Without a mixer (or with one that has no music snapshots, which disables it), the volume, mute and mixer group properties threw `NullReferenceException`, and a mixer group property threw `InvalidOperationException` when the mixer had no such group. The group properties return null now, and the volumes read 0.
+- `BgmVolume` and `SfxVolume` read 0 while the music or SFX were muted, so a settings screen that read the volume and wrote it back lost it. They now return the volume you set, and the volume restored on unmute starts from the mixer instead of assuming 0 dB.
 
 ## [1.6.1] - 2025-04-08
 ### Added

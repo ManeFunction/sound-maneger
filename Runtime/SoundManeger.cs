@@ -145,8 +145,14 @@ namespace Mane.Unity.SoundManeger
                 return;
 
             _musicLoader = new ResourcesMusicLoader();
-            
+
             FillMixerStuff();
+
+            // The volumes restored on unmute start from the mixer
+            if (TryGetVolume("BgmVolume", out float bgmVolume))
+                _cachedBgmVolume = bgmVolume;
+            if (TryGetVolume("SfxVolume", out float sfxVolume))
+                _cachedSfxVolume = sfxVolume;
 
             if (!ValidateAudioSources())
             {
@@ -300,13 +306,13 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public float BgmVolume
         {
-            get => GetVolume("BgmVolume");
+            get => _cachedBgmVolume;
             set
             {
-                _cachedBgmVolume = value;
+                _cachedBgmVolume = Mathf.Clamp01(value);
 
                 if (!MuteMusic)
-                    SetVolume("BgmVolume", value);
+                    SetVolume("BgmVolume", _cachedBgmVolume);
             }
         }
         
@@ -315,24 +321,27 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public float SfxVolume
         {
-            get => GetVolume("SfxVolume");
+            get => _cachedSfxVolume;
             set
             {
-                _cachedSfxVolume = value;
+                _cachedSfxVolume = Mathf.Clamp01(value);
 
                 if (!MuteSfx)
-                    SetVolume("SfxVolume", value);
+                    SetVolume("SfxVolume", _cachedSfxVolume);
             }
         }
-        
-        private float GetVolume(string key)
+
+        private float GetVolume(string key) => TryGetVolume(key, out float volume) ? volume : 0.0f;
+
+        private bool TryGetVolume(string key, out float volume)
         {
+            volume = 0.0f;
             if (_mixer == null || !_mixer.GetFloat(key, out float value))
-                return 0.0f;
+                return false;
 
-            value = (value + 80.0f) / 100.0f;
+            volume = (value + 80.0f) / 100.0f;
 
-            return value;
+            return true;
         }
 
         private void SetVolume(string key, float value)
