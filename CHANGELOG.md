@@ -42,6 +42,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - With a null playlist owner (the docs say the manager is used then) or an owner that was destroyed, the next playlist track was never preloaded, so there was a gap between tracks.
 - With a retrying loader (`AddressablesMusicLoader`), a sound effect or voice clip that failed to load was retried forever: every failed `PlaySfx` call started its own endless retry loop, and the sound played late if it ever loaded. Only music is retried now.
 - `ResourcesMusicLoader` never finished a load whose owner was destroyed or deactivated while loading, because the loading coroutine ran on the owner and stopped with it. The load kept the music loading lock, so every later music load timed out. The loader no longer needs the owner, and its `??=` that missed destroyed owners is gone with it.
+- `AddressablesMusicLoader` had the same never-finishing load when its owner was destroyed or deactivated. It also never released the asset of a load that was canceled, or whose owner was destroyed before the load finished, so those clips stayed in memory. They are released now.
 
 ## [1.6.1] - 2025-04-08
 ### Added

@@ -1,6 +1,4 @@
 #if UNITY_ADDRESSABLES
-using System;
-using System.Collections;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,61 +18,30 @@ namespace Mane.Unity.SoundManeger
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path)) return null;
-            
+
             if (!owner) owner = SoundManeger.Instance;
-            
-            AudioClip result = null;
-            Coroutine coroutine = owner.StartCoroutine(GetMusicCoroutine(owner, path, OnClipLoaded, token));
-            while (coroutine != null)
+
+            // Polled directly: a coroutine on the owner would stop with it, and this load would never finish
+            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(path);
+            while (!handle.IsDone)
             {
                 if (token.IsCancellationRequested)
                 {
-                    owner.StopCoroutine(coroutine);
-                    coroutine = null;
+                    // Nobody takes the clip, so it is released as soon as it loads
+                    handle.Completed += OnShouldReleaseHandler;
+                    return null;
                 }
-                
+
                 await Task.Yield();
             }
 
-            return result;
-
-            
-            void OnClipLoaded(AudioClip clip)
+            // Canceled, failed, or there is no owner left to hold the clip
+            if (token.IsCancellationRequested || handle.Status != AsyncOperationStatus.Succeeded || !owner)
             {
-                result = clip;
-                coroutine = null;
-            }
-        }
-        
-        private IEnumerator GetMusicCoroutine(MonoBehaviour owner, string path, Action<AudioClip> callback,
-            CancellationToken token)
-        {
-            AsyncOperationHandle<AudioClip> handle = default;
-            if (!handle.IsValid())
-            {
-                handle = Addressables.LoadAssetAsync<AudioClip>(path);
-                yield return handle;
-                
-                if (token.IsCancellationRequested)
-                {
-                    callback?.Invoke(null);
-                    yield break;
-                }
-                
-                if (handle.Status != AsyncOperationStatus.Succeeded)
-                {
-                    Addressables.Release(handle);
-                    callback?.Invoke(null);
-                    yield break;
-                }
+                OnShouldReleaseHandler(handle);
+                return null;
             }
 
-            if (!owner)
-            {
-                callback?.Invoke(null);
-                yield break;
-            }
-            
             var links = owner.GetComponents<AddressablesMusicLink>();
             AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
             if (!link)
@@ -84,7 +51,7 @@ namespace Mane.Unity.SoundManeger
             }
 
             link.Bind(handle);
-            callback?.Invoke(handle.Result);
+            return handle.Result;
         }
 
         private void OnShouldReleaseHandler(AsyncOperationHandle<AudioClip> handler)
