@@ -77,7 +77,10 @@ namespace Mane.Unity.SoundManeger
         private readonly IRandom _random = new ManeRandom();
         private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
         private readonly object _playlistLock = new();
-        private volatile bool _isMusicLoading;
+        // Music loads in progress, the playlist waits for them before it changes the track
+        private int _musicLoads;
+        // Bumped by every PlayMusic and StopMusic call, see StartMusicRequest()
+        private int _musicRequest;
         private UnityCancellationTokenSource _sfxCancellationSource;
         private UnityCancellationTokenSource _musicCancellationSource;
 
@@ -386,23 +389,20 @@ namespace Mane.Unity.SoundManeger
         /// <param name="clip">Track to play.</param>
         public void PlayMusic(AudioClip clip)
         {
-            _musicSource1.loop = true;
-            _musicSource2.loop = true;
-            RemoveMode(PlayMode.PlaylistActive);
-            PlaylistTrackChange -= OnTrackChange;
-            ClearPlaylist();
-            
-            PlayMusicClip(clip);
+            if (clip == null) return;
+
+            StartMusicRequest();
+            PlaySingleTrack(clip);
         }
-        
+
         /// <summary>
         /// Load and play a single music track.
         /// </summary>
         /// <param name="owner">Track loading owner. If null, SoundManeger.Instance will be used.</param>
         /// <param name="path">Path to the track.</param>
-        public async void PlayMusic(MonoBehaviour owner, string path) => 
-            PlayMusic(await GetClip(owner, path, true));
-        
+        public async void PlayMusic(MonoBehaviour owner, string path) =>
+            await LoadSingleTrack(StartMusicRequest(), owner, path);
+
         /// <summary>
         /// Play a playlist.
         /// </summary>
@@ -414,10 +414,12 @@ namespace Mane.Unity.SoundManeger
         {
             if (string.IsNullOrEmpty(first)) return;
 
+            int request = StartMusicRequest();
+
             // single track
             if (playlist.IsNullOrEmpty())
             {
-                PlayMusic(await GetClip(owner, first, true));
+                await LoadSingleTrack(request, owner, first);
 
                 return;
             }
@@ -425,11 +427,14 @@ namespace Mane.Unity.SoundManeger
             // playlist
             List<string> pl = new(playlist);
             if (firstTrackIsIntro)
-                PlayMusic(await GetClip(owner, first, true));
-            else
-                pl.Insert(0, first);
+            {
+                await StartPlaylistAfterIntro(request, owner, first, pl);
 
-            StartPlaylist(owner, pl, firstTrackIsIntro);
+                return;
+            }
+
+            pl.Insert(0, first);
+            StartPlaylist(owner, pl, false);
         }
 
         /// <summary>
@@ -443,23 +448,28 @@ namespace Mane.Unity.SoundManeger
             // empty call
             if (playlist.IsNullOrEmpty()) return;
 
+            int request = StartMusicRequest();
+
             // single track
             if (playlist.Length == 1)
             {
-                PlayMusic(await GetClip(owner, playlist[0], true));
+                await LoadSingleTrack(request, owner, playlist[0]);
 
                 return;
             }
-            
+
             // playlist
             List<string> pl = new(playlist);
             if (firstTrackIsIntro)
             {
-                PlayMusic(await GetClip(owner, pl[0], true));
+                string intro = pl[0];
                 pl.RemoveAt(0);
+                await StartPlaylistAfterIntro(request, owner, intro, pl);
+
+                return;
             }
 
-            StartPlaylist(owner, pl, firstTrackIsIntro);
+            StartPlaylist(owner, pl, false);
         }
         
         /// <summary>
@@ -497,22 +507,64 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public void StopMusic()
         {
+            StartMusicRequest();
             SetMode(PlayMode.Silence);
             PlaylistTrackChange -= OnTrackChange;
             _musicSource1.Stop();
             _musicSource2.Stop();
             ClearPlaylist();
-            
-            if (_musicCancellationSource != null)
-            {
-                _musicCancellationSource.Cancel();
-                _musicCancellationSource.Dispose();
-                _musicCancellationSource = null;
-            }
 
             // Clear references to allow GC
             _musicSource1.clip = null;
             _musicSource2.clip = null;
+        }
+
+        // Every PlayMusic and StopMusic call starts a new request and cancels the music loads of the older ones.
+        // A load that finishes after a newer request is dropped, so music calls take effect in the order they are made.
+        private int StartMusicRequest()
+        {
+            CancelMusicLoading();
+            return ++_musicRequest;
+        }
+
+        private void CancelMusicLoading()
+        {
+            if (_musicCancellationSource == null) return;
+
+            _musicCancellationSource.Cancel();
+            _musicCancellationSource.Dispose();
+            _musicCancellationSource = null;
+        }
+
+        private void PlaySingleTrack(AudioClip clip)
+        {
+            _musicSource1.loop = true;
+            _musicSource2.loop = true;
+            RemoveMode(PlayMode.PlaylistActive);
+            PlaylistTrackChange -= OnTrackChange;
+            ClearPlaylist();
+
+            PlayMusicClip(clip);
+        }
+
+        private async Task LoadSingleTrack(int request, MonoBehaviour owner, string path)
+        {
+            AudioClip clip = await GetClip(owner, path, true);
+            if (request == _musicRequest && clip != null)
+                PlaySingleTrack(clip);
+        }
+
+        // The intro plays once and the playlist starts after it. If the intro does not load, the playlist starts at once.
+        private async Task StartPlaylistAfterIntro(int request, MonoBehaviour owner, string intro, List<string> playlist)
+        {
+            AudioClip clip = await GetClip(owner, intro, true);
+            if (request != _musicRequest)
+                return;
+
+            if (clip != null)
+                PlaySingleTrack(clip);
+
+            StartPlaylist(owner, playlist, clip != null);
         }
 
 
@@ -550,7 +602,7 @@ namespace Mane.Unity.SoundManeger
             }
 
             if (startAfterCurrentTrack)
-                CacheNextTrack(GetCancellationToken(true));
+                CacheNextTrack();
             else
                 OnTrackChange();
         }
@@ -600,14 +652,12 @@ namespace Mane.Unity.SoundManeger
 
             // Only proceed if we got a valid track path
             if (!string.IsNullOrEmpty(trackPath))
-            {
-                var token = GetCancellationToken(true);
-                CacheNextTrack(token);
-            }
+                CacheNextTrack();
         }
 
-        private async void CacheNextTrack(CancellationToken token)
+        private async void CacheNextTrack()
         {
+            int request = _musicRequest;
             MonoBehaviour owner;
             string trackPath;
 
@@ -622,7 +672,9 @@ namespace Mane.Unity.SoundManeger
             // Only proceed if we have valid data
             if (!string.IsNullOrEmpty(trackPath) && owner != null)
             {
-                _nextPlaylistTrack = await GetClip(owner, trackPath, true);
+                AudioClip clip = await GetClip(owner, trackPath, true);
+                if (request == _musicRequest)
+                    _nextPlaylistTrack = clip;
             }
         }
 
@@ -636,8 +688,18 @@ namespace Mane.Unity.SoundManeger
                 return;
             }
 
-            var clip = await GetClip(_playlistOwner, _playlist[_playlistPointer], true);
-            if (clip)
+            int request = _musicRequest;
+            MonoBehaviour owner;
+            string trackPath;
+            lock (_playlistLock)
+            {
+                if (_playlist == null || _playlist.Count == 0) return;
+                owner = _playlistOwner;
+                trackPath = _playlist[_playlistPointer];
+            }
+
+            var clip = await GetClip(owner, trackPath, true);
+            if (request == _musicRequest && clip)
             {
                 PlayMusicClip(clip);
                 PrepareNextTrack();
@@ -821,10 +883,12 @@ namespace Mane.Unity.SoundManeger
             {
                 if (isMusic)
                 {
-                    _isMusicLoading = true;
+                    // Taken once, so a newer music request cancels the waiting and the retries of this load too
+                    CancellationToken musicToken = GetCancellationToken(true);
+                    Interlocked.Increment(ref _musicLoads);
                     try
                     {
-                        if (!await _musicLoadingSemaphore.WaitAsync(TimeSpan.FromSeconds(_loadingTimeout)))
+                        if (!await _musicLoadingSemaphore.WaitAsync(TimeSpan.FromSeconds(_loadingTimeout), musicToken))
                         {
                             Debug.LogError("[SoundManeger] Music loading semaphore timeout!");
                             return null;
@@ -832,31 +896,24 @@ namespace Mane.Unity.SoundManeger
 
                         try
                         {
-                            if (_musicCancellationSource != null)
-                            {
-                                _musicCancellationSource.Cancel();
-                                _musicCancellationSource.Dispose();
-                                _musicCancellationSource = null;
-                            }
-
                             AudioClip clip = null;
                             bool shouldRetry = _musicLoader.ShouldRetry;
-                            
+
                             do
                             {
-                                clip = await _musicLoader.GetMusicAsync(owner, path, GetCancellationToken(true));
-                                
-                                if (clip != null || !shouldRetry)
+                                clip = await _musicLoader.GetMusicAsync(owner, path, musicToken);
+
+                                if (clip != null || !shouldRetry || musicToken.IsCancellationRequested)
                                     break;
-                                
+
                                 Debug.LogWarning($"[SoundManeger] Failed to load music, retrying after {_musicRetryDelay} seconds: {path}");
-                                await Task.Delay(TimeSpan.FromSeconds(_musicRetryDelay), GetCancellationToken(true));
-                                
+                                await Task.Delay(TimeSpan.FromSeconds(_musicRetryDelay), musicToken);
+
                             } while (!_isDisposed);
-                            
-                            if (clip == null)
+
+                            if (clip == null && !musicToken.IsCancellationRequested)
                                 Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
-                            
+
                             return clip;
                         }
                         finally
@@ -866,7 +923,7 @@ namespace Mane.Unity.SoundManeger
                     }
                     finally
                     {
-                        _isMusicLoading = false;
+                        Interlocked.Decrement(ref _musicLoads);
                     }
                 }
                 
@@ -938,7 +995,7 @@ namespace Mane.Unity.SoundManeger
                 _lastCleanupTime = currentTime;
             }
 
-            if (!_muteMusic && GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && !_isMusicLoading)
+            if (!_muteMusic && GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && _musicLoads == 0)
                 PlaylistTrackChange?.Invoke();
         }
         

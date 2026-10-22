@@ -33,6 +33,11 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - A track change while the lowpass was on crossfaded to the snapshot without it, so the lowpass was gone and `Lowpass(true)` then did nothing, because the manager still thought it was on. Crossfades now keep the lowpass. `Lowpass` also threw when the mixer had no lowpass snapshots; it now does nothing then, as the warning says.
 - Playing the music clip that was already playing swapped the active music source, so the next track replaced the playing one on the same source, without a crossfade.
 - After `StopMusic`, unmuting the music raised `PlaylistTrackChange` every frame, because the playlist mode was never cleared and unmuting marked the music as playing again. Starting music while muted also turned playlist track changes back on. Muting no longer changes the play mode; playlist tracks simply do not change while the music is muted.
+- Music calls did not take effect in the order they were made. A track or playlist that finished loading after a newer `PlayMusic` or `StopMusic` call still started playing (a pending intro even started its playlist after `StopMusic`), and the code that was meant to cancel the previous load only ran after it had finished. Every `PlayMusic` and `StopMusic` call now cancels the music loads of the older ones, and a load that finishes late is dropped.
+- `StopMusic` during an Addressables retry did not stop the retries, so the track still started after the retry delay. Canceled loads also logged "Failed to load music clip" errors.
+- Overlapping music loads cleared the "loading" state when the first of them finished, so a playlist could start loading its next track while another load was still running.
+- A track that failed to load in `PlayMusic(owner, path)` dropped the running playlist and left its current track looping. It now leaves the music as it was, and `PlayMusic(null)` does nothing.
+- When the intro of a playlist failed to load, the playlist waited for a track that was not playing and never started. It now starts at once.
 
 ## [1.6.1] - 2025-04-08
 ### Added
