@@ -365,23 +365,22 @@ namespace Mane.Unity.SoundManeger
         /// <param name="enable">Enable or disable.</param>
         public void Lowpass(bool enable)
         {
-            if (_lowpass == enable) return;
+            if (_lowpass == enable || !HasLowpass) return;
 
             _lowpass = enable;
-            if (_activeFirstMusicSource)
-            {
-                if (_lowpass)
-                    _music1LowSnapshot.TransitionTo(_lowpassTime);
-                else
-                    _music1Snapshot.TransitionTo(_lowpassTime);
-            }
-            else
-            {
-                if (_lowpass)
-                    _music2LowSnapshot.TransitionTo(_lowpassTime);
-                else
-                    _music2Snapshot.TransitionTo(_lowpassTime);
-            }
+            GetMusicSnapshot(_activeFirstMusicSource).TransitionTo(_lowpassTime);
+        }
+
+        // Missing lowpass snapshots are reported by FillMixerStuff()
+        private bool HasLowpass => _mixer != null && _music1LowSnapshot != null && _music2LowSnapshot != null;
+
+        // Snapshot that makes the given music source audible, with the lowpass while it is on
+        private AudioMixerSnapshot GetMusicSnapshot(bool firstSource)
+        {
+            if (firstSource)
+                return _lowpass ? _music1LowSnapshot : _music1Snapshot;
+
+            return _lowpass ? _music2LowSnapshot : _music2Snapshot;
         }
 
         
@@ -773,7 +772,7 @@ namespace Mane.Unity.SoundManeger
                     if (!GetMode().HasFlag(PlayMode.PlaylistActive))
                         _musicSource2.loop = true;
                     _musicSource2.Play();
-                    _music2Snapshot.TransitionTo(_transitionTime);
+                    GetMusicSnapshot(false).TransitionTo(_transitionTime);
                     _activeFirstMusicSource = false;
                     this.TryKillCoroutine(ref _transitionAwaiter);
                     _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource1, _transitionTime));
@@ -784,7 +783,7 @@ namespace Mane.Unity.SoundManeger
                     if (!GetMode().HasFlag(PlayMode.PlaylistActive))
                         _musicSource1.loop = true;
                     _musicSource1.Play();
-                    _music1Snapshot.TransitionTo(_transitionTime);
+                    GetMusicSnapshot(true).TransitionTo(_transitionTime);
                     _activeFirstMusicSource = true;
                     this.TryKillCoroutine(ref _transitionAwaiter);
                     _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource2, _transitionTime));
