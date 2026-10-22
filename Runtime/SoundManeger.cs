@@ -14,6 +14,8 @@ namespace Mane.Unity.SoundManeger
     [ManeStyle]
     [AddComponentMenu("Mane Tools/Audio/Sound Maneger")]
     [DisallowMultipleComponent]
+    // Set up before other scripts, so they can play audio from their own Awake()
+    [DefaultExecutionOrder(-1000)]
     public class SoundManeger : UnitySingleton<SoundManeger>, IDisposable
     {
         public enum PlayingOrder
@@ -72,7 +74,8 @@ namespace Mane.Unity.SoundManeger
         private AudioMixerSnapshot _music1LowSnapshot;
         private AudioMixerSnapshot _music2LowSnapshot;
 
-        private IMusicLoader _musicLoader;
+        // Set here, not in Awake(), so a SetMusicLoader() call made before Awake() is kept
+        private IMusicLoader _musicLoader = new ResourcesMusicLoader();
         // Own random source, so playlists do not change UnityEngine.Random or a seeded global random.
         private readonly IRandom _random = new ManeRandom();
         private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
@@ -143,8 +146,6 @@ namespace Mane.Unity.SoundManeger
             base.Awake();
             if (Instance != this)
                 return;
-
-            _musicLoader = new ResourcesMusicLoader();
 
             FillMixerStuff();
 

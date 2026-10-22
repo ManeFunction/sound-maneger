@@ -46,6 +46,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - Without a mixer (or with one that has no music snapshots, which disables it), the volume, mute and mixer group properties threw `NullReferenceException`, and a mixer group property threw `InvalidOperationException` when the mixer had no such group. The group properties return null now, and the volumes read 0.
 - `BgmVolume` and `SfxVolume` read 0 while the music or SFX were muted, so a settings screen that read the volume and wrote it back lost it. They now return the volume you set, and the volume restored on unmute starts from the mixer instead of assuming 0 dB.
 - `Dispose` disposed the loading token sources without canceling them, so pending loads kept going, and it disposed the music loading lock while loads still used it, which logged errors when the manager was destroyed mid-load. It also left the playlist running for a manager that was disposed but not destroyed. Pending loads are canceled now and the playlist stops.
+- Calls made from another script's `Awake` before the manager's own `Awake` could throw, because the mixer snapshots were not looked up yet, and a `SetMusicLoader` call made then was overwritten with `ResourcesMusicLoader`. The manager now runs its `Awake` before default scripts, and keeps a loader set early.
 
 ## [1.6.1] - 2025-04-08
 ### Added
