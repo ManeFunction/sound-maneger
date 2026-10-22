@@ -32,6 +32,9 @@ namespace Mane.Unity.SoundManeger
             AllSources = 2,
         }
 
+        // The package mixer, in the package's Resources folder
+        private const string DefaultMixerPath = "SoundManeger/AudioMixer";
+
         [Flags]
         private enum PlayMode : byte
         {
@@ -155,6 +158,8 @@ namespace Mane.Unity.SoundManeger
             if (TryGetVolume("SfxVolume", out float sfxVolume))
                 _cachedSfxVolume = sfxVolume;
 
+            CreateMissingSources();
+
             if (!ValidateAudioSources())
             {
                 Debug.LogError("[SoundManeger] Critical components are missing! Check the prefab setup.");
@@ -185,8 +190,11 @@ namespace Mane.Unity.SoundManeger
         
         private void FillMixerStuff()
         {
+            // Your own mixer in a Resources folder first, then the one from this package
             if (_mixer == null)
                 _mixer = Resources.Load<AudioMixer>("AudioMixer");
+            if (_mixer == null)
+                _mixer = Resources.Load<AudioMixer>(DefaultMixerPath);
 
             if (_mixer == null)
             {
@@ -211,6 +219,30 @@ namespace Mane.Unity.SoundManeger
                 Debug.LogWarning("[SoundManeger] Missing lowpass snapshots! Lowpass feature will be disabled.");
                 _lowpass = false;
             }
+        }
+
+        // A manager without any source assigned (for example, the one Instance creates when the scene has none)
+        // gets its own sources, routed like the ones in the prefab
+        private void CreateMissingSources()
+        {
+            if (_musicSource1 != null || _musicSource2 != null || _sfxSource != null ||
+                _duckBgmSource != null || _duckAllSource != null)
+                return;
+
+            _musicSource1 = CreateSource("Master/BGM/Music1");
+            _musicSource2 = CreateSource("Master/BGM/Music2");
+            _sfxSource = CreateSource("Master/SFX/Effects");
+            _duckBgmSource = CreateSource("Master/SFX/FadeBgm");
+            _duckAllSource = CreateSource("Master/SFX/FadeAll");
+        }
+
+        private AudioSource CreateSource(string groupPath)
+        {
+            AudioSource source = gameObject.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            source.outputAudioMixerGroup = FindGroup(groupPath);
+
+            return source;
         }
 
         private bool ValidateAudioSources()
