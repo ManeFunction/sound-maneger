@@ -91,8 +91,10 @@ namespace Mane.Unity.SoundManeger
 
         private List<string> _playlist;
         private int _playlistPointer;
-        private MonoBehaviour _playlistOwner; 
+        private MonoBehaviour _playlistOwner;
         private AudioClip _nextPlaylistTrack;
+        // Playlist tracks in a row that failed to load
+        private int _failedPlaylistTracks;
         private volatile int _modeFlags;
 
         private bool _activeFirstMusicSource;
@@ -570,15 +572,20 @@ namespace Mane.Unity.SoundManeger
 
         private void StartPlaylist(MonoBehaviour owner, List<string> playlist, bool startAfterCurrentTrack)
         {
+            // Music is disabled without a mixer, see FillMixerStuff()
+            if (_mixer == null) return;
+
             lock (_playlistLock)
             {
                 _playlist = new List<string>(playlist); // Create defensive copy
                 _playlistOwner = owner;
                 _nextPlaylistTrack = null;
+                _failedPlaylistTracks = 0;
 
                 _musicSource1.loop = false;
                 _musicSource2.loop = false;
-                AddMode(PlayMode.PlaylistActive);
+                // Music is on from here, so Update() moves on even if the first track fails to load
+                AddMode(PlayMode.NeedMusicSwitch);
 
                 // safe way to exclude double subscription
                 PlaylistTrackChange -= OnTrackChange;
@@ -614,37 +621,7 @@ namespace Mane.Unity.SoundManeger
             {
                 if (_playlist == null || _playlist.Count == 0) return;
 
-                if (_playlistPlayingOrder == PlayingOrder.Random)
-                {
-                    if (_playlist.Count == 1)
-                    {
-                        _playlistPointer = 0;
-                    }
-                    else
-                    {
-                        int old = _playlistPointer;
-                        do
-                        {
-                            _playlistPointer = _random.Next(0, _playlist.Count);
-                        } while (_playlistPointer == old);
-                    }
-                }
-                else
-                {
-                    _playlistPointer++;
-                    if (_playlistPointer >= _playlist.Count)
-                    {
-                        _playlistPointer = 0;
-                        if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
-                        {
-                            var lastTrack = _playlist.Last();
-                            do
-                            {
-                                _playlist.Shuffle(_random);
-                            } while (_playlist.First() == lastTrack);
-                        }
-                    }
-                }
+                MovePlaylistPointer();
 
                 // Get the track path while still in the lock
                 trackPath = _playlist[_playlistPointer];
@@ -653,6 +630,63 @@ namespace Mane.Unity.SoundManeger
             // Only proceed if we got a valid track path
             if (!string.IsNullOrEmpty(trackPath))
                 CacheNextTrack();
+        }
+
+        // Call under _playlistLock
+        private void MovePlaylistPointer()
+        {
+            if (_playlistPlayingOrder == PlayingOrder.Random)
+            {
+                if (_playlist.Count == 1)
+                {
+                    _playlistPointer = 0;
+                }
+                else
+                {
+                    int old = _playlistPointer;
+                    do
+                    {
+                        _playlistPointer = _random.Next(0, _playlist.Count);
+                    } while (_playlistPointer == old);
+                }
+            }
+            else
+            {
+                _playlistPointer++;
+                if (_playlistPointer >= _playlist.Count)
+                {
+                    _playlistPointer = 0;
+                    if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
+                    {
+                        var lastTrack = _playlist.Last();
+                        do
+                        {
+                            _playlist.Shuffle(_random);
+                        } while (_playlist.First() == lastTrack);
+                    }
+                }
+            }
+        }
+
+        // A track that does not load is skipped, the next Update() tries the one after it.
+        // When none of the tracks loads, the playlist stops.
+        private void SkipFailedTrack()
+        {
+            lock (_playlistLock)
+            {
+                if (_playlist == null || _playlist.Count == 0) return;
+
+                if (++_failedPlaylistTracks < _playlist.Count)
+                {
+                    MovePlaylistPointer();
+                    return;
+                }
+            }
+
+            Debug.LogError("[SoundManeger] None of the playlist tracks could be loaded, the playlist is stopped.");
+            RemoveMode(PlayMode.PlaylistActive);
+            PlaylistTrackChange -= OnTrackChange;
+            ClearPlaylist();
         }
 
         private async void CacheNextTrack()
@@ -682,6 +716,7 @@ namespace Mane.Unity.SoundManeger
         {
             if (_nextPlaylistTrack)
             {
+                _failedPlaylistTracks = 0;
                 PlayMusicClip(_nextPlaylistTrack);
                 _nextPlaylistTrack = null;
                 PrepareNextTrack();
@@ -699,10 +734,18 @@ namespace Mane.Unity.SoundManeger
             }
 
             var clip = await GetClip(owner, trackPath, true);
-            if (request == _musicRequest && clip)
+            if (request != _musicRequest)
+                return;
+
+            if (clip)
             {
+                _failedPlaylistTracks = 0;
                 PlayMusicClip(clip);
                 PrepareNextTrack();
+            }
+            else
+            {
+                SkipFailedTrack();
             }
         }
 
@@ -714,6 +757,7 @@ namespace Mane.Unity.SoundManeger
                 _playlistOwner = null;
                 _nextPlaylistTrack = null;
                 _playlistPointer = 0;
+                _failedPlaylistTracks = 0;
             }
         }
 

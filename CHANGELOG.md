@@ -38,6 +38,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - Overlapping music loads cleared the "loading" state when the first of them finished, so a playlist could start loading its next track while another load was still running.
 - A track that failed to load in `PlayMusic(owner, path)` dropped the running playlist and left its current track looping. It now leaves the music as it was, and `PlayMusic(null)` does nothing.
 - When the intro of a playlist failed to load, the playlist waited for a track that was not playing and never started. It now starts at once.
+- A playlist track that failed to load with a loader that does not retry (such as `ResourcesMusicLoader`) was loaded again every frame, flooding the Console with errors, and the playlist never moved on. If nothing was playing before the playlist started, it was stuck silently instead. Such a track is now skipped, and when none of the tracks can be loaded, the playlist stops with one error.
 
 ## [1.6.1] - 2025-04-08
 ### Added
