@@ -233,17 +233,16 @@ namespace Mane.Unity.SoundManeger
 
         public AudioListener Listener => _listener;
 
-        public AudioMixerGroup MusicGroup =>
-            _mixer.FindMatchingGroups("Master/BGM/MusicAdd").First();
-        
-        public AudioMixerGroup SfxGroup =>
-            _mixer.FindMatchingGroups("Master/SFX/Effects").First();
-        
-        public AudioMixerGroup SfxDuckMusicGroup =>
-            _mixer.FindMatchingGroups("Master/SFX/FadeBgm").First();
-        
-        public AudioMixerGroup SfxDuckAllGroup =>
-            _mixer.FindMatchingGroups("Master/SFX/FadeAll").First();
+        public AudioMixerGroup MusicGroup => FindGroup("Master/BGM/MusicAdd");
+
+        public AudioMixerGroup SfxGroup => FindGroup("Master/SFX/Effects");
+
+        public AudioMixerGroup SfxDuckMusicGroup => FindGroup("Master/SFX/FadeBgm");
+
+        public AudioMixerGroup SfxDuckAllGroup => FindGroup("Master/SFX/FadeAll");
+
+        private AudioMixerGroup FindGroup(string path) =>
+            _mixer != null ? _mixer.FindMatchingGroups(path).FirstOrDefault() : null;
 
 
         /// <summary>
@@ -328,7 +327,9 @@ namespace Mane.Unity.SoundManeger
         
         private float GetVolume(string key)
         {
-            _mixer.GetFloat(key, out float value);
+            if (_mixer == null || !_mixer.GetFloat(key, out float value))
+                return 0.0f;
+
             value = (value + 80.0f) / 100.0f;
 
             return value;
@@ -336,6 +337,8 @@ namespace Mane.Unity.SoundManeger
 
         private void SetVolume(string key, float value)
         {
+            if (_mixer == null) return;
+
             if (value < 0.0f)
                 value = 0.0f;
             else if (value > 1.0f)
