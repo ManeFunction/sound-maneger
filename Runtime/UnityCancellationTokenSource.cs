@@ -2,20 +2,9 @@ using System.Threading;
 
 namespace Mane.Unity.SoundManeger
 {
+    // Cancels itself when the editor leaves Play mode, so loads do not outlive the session.
     internal class UnityCancellationTokenSource : CancellationTokenSource
     {
-        private static UnityCancellationTokenSource _global;
-
-        public static CancellationToken GlobalToken
-        {
-            get
-            {
-                _global ??= new UnityCancellationTokenSource();
-                
-                return _global.Token;
-            }
-        }
-
 #if UNITY_EDITOR
         public UnityCancellationTokenSource() => 
             UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeChanged;
