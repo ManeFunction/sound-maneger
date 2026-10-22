@@ -2,7 +2,7 @@
 using UnityEngine;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-namespace Mane.SoundManeger
+namespace Mane.Unity.SoundManeger
 {
     public delegate void MusicLinkHandler(AsyncOperationHandle<AudioClip> musicHandler);
 

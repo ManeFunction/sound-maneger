@@ -5,15 +5,15 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Mane.Extensions;
+using Mane.DotNet;
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace Mane.SoundManeger
+namespace Mane.Unity.SoundManeger
 {
     [AddComponentMenu("Audio/Sound Manager")]
     [DisallowMultipleComponent]
-    public class SoundManeger : MonoSingleton<SoundManeger>, IDisposable
+    public class SoundManeger : UnitySingleton<SoundManeger>, IDisposable
     {
         public enum PlayingOrder
         {
@@ -71,6 +71,8 @@ namespace Mane.SoundManeger
         private AudioMixerSnapshot _music2LowSnapshot;
 
         private IMusicLoader _musicLoader;
+        // Own random source, so playlists do not change UnityEngine.Random or a seeded global random.
+        private readonly IRandom _random = new ManeRandom();
         private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
         private readonly object _playlistLock = new();
         private volatile bool _isMusicLoading;
@@ -133,6 +135,8 @@ namespace Mane.SoundManeger
         protected override void Awake()
         {
             base.Awake();
+            if (Instance != this)
+                return;
 
             _musicLoader = new ResourcesMusicLoader();
             
@@ -146,9 +150,6 @@ namespace Mane.SoundManeger
             }
 
             ConfigureAudioSources();
-
-            if (transform.parent == null)
-                DontDestroyOnLoad(gameObject);
         }
 
         private void Reset() => FillMixerStuff();
@@ -538,13 +539,13 @@ namespace Mane.SoundManeger
                         _playlistPointer = 0;
                         break;
                     
-                    case PlayingOrder.Shuffle: 
+                    case PlayingOrder.Shuffle:
                         _playlistPointer = 0;
-                        _playlist.Shuffle();
+                        _playlist.Shuffle(_random);
                         break;
-                    
+
                     case PlayingOrder.Random:
-                        _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
+                        _playlistPointer = _random.Next(0, _playlist.Count);
                         break;
                 }
             }
@@ -573,7 +574,7 @@ namespace Mane.SoundManeger
                         int old = _playlistPointer;
                         do
                         {
-                            _playlistPointer = UnityEngine.Random.Range(0, _playlist.Count);
+                            _playlistPointer = _random.Next(0, _playlist.Count);
                         } while (_playlistPointer == old);
                     }
                 }
@@ -588,7 +589,7 @@ namespace Mane.SoundManeger
                             var lastTrack = _playlist.Last();
                             do
                             {
-                                _playlist.Shuffle();
+                                _playlist.Shuffle(_random);
                             } while (_playlist.First() == lastTrack);
                         }
                     }
@@ -1054,7 +1055,11 @@ namespace Mane.SoundManeger
                 _activeSfx.TryTake(out _);
         }
 
-        protected virtual void OnDestroy() => Dispose();
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+            Dispose();
+        }
 
         public void Dispose()
         {

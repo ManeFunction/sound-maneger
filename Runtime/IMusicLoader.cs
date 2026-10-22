@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace Mane.SoundManeger
+namespace Mane.Unity.SoundManeger
 {
     public interface IMusicLoader
     {

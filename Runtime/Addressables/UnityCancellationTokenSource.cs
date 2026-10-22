@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace Mane.SoundManeger
+namespace Mane.Unity.SoundManeger
 {
     internal class UnityCancellationTokenSource : CancellationTokenSource
     {

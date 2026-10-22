@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-namespace Mane.SoundManeger
+namespace Mane.Unity.SoundManeger
 {
     public class AddressablesMusicLoader : IMusicLoader
     {
