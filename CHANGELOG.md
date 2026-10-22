@@ -32,6 +32,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - `StopSfx`, `PlayVoice` and `StopVoice` threw `NullReferenceException` when the optional duck sources were not assigned, although the manager only warns about them. Voice now does nothing without the duck BGM source, and a voice clip that failed to load no longer stops the voice that is playing.
 - A track change while the lowpass was on crossfaded to the snapshot without it, so the lowpass was gone and `Lowpass(true)` then did nothing, because the manager still thought it was on. Crossfades now keep the lowpass. `Lowpass` also threw when the mixer had no lowpass snapshots; it now does nothing then, as the warning says.
 - Playing the music clip that was already playing swapped the active music source, so the next track replaced the playing one on the same source, without a crossfade.
+- After `StopMusic`, unmuting the music raised `PlaylistTrackChange` every frame, because the playlist mode was never cleared and unmuting marked the music as playing again. Starting music while muted also turned playlist track changes back on. Muting no longer changes the play mode; playlist tracks simply do not change while the music is muted.
 
 ## [1.6.1] - 2025-04-08
 ### Added

@@ -263,11 +263,7 @@ namespace Mane.Unity.SoundManeger
             get => _muteMusic;
             set
             {
-                if (value)
-                    RemoveMode(PlayMode.PlayingMusic);
-                else
-                    AddMode(PlayMode.PlayingMusic);
-
+                // Playlist tracks do not change while muted, see Update()
                 _muteMusic = value;
                 SetVolume("BgmVolume", value ? 0 : _cachedBgmVolume);
             }
@@ -501,7 +497,7 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public void StopMusic()
         {
-            RemoveMode(PlayMode.PlayingMusic);
+            SetMode(PlayMode.Silence);
             PlaylistTrackChange -= OnTrackChange;
             _musicSource1.Stop();
             _musicSource2.Stop();
@@ -942,7 +938,7 @@ namespace Mane.Unity.SoundManeger
                 _lastCleanupTime = currentTime;
             }
 
-            if (GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && !_isMusicLoading)
+            if (!_muteMusic && GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && !_isMusicLoading)
                 PlaylistTrackChange?.Invoke();
         }
         
