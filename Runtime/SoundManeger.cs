@@ -58,7 +58,7 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private bool _continueAudioOnPause = true;
 
         [Header("Optimization")]
-        [Tooltip("Time in seconds after which inactive SFX timings will be cleaned up. Should not be less than max SFX length in your game.")]
+        [Tooltip("How often, in seconds, the manager forgets sound effects that have finished playing.")]
         [SerializeField] private float _sfxTimingsCleanupThreshold = 60f;
         [SerializeField] private int _maxConcurrentSfx = 100;
         [SerializeField] private float _loadingTimeout = 30f;
@@ -103,7 +103,7 @@ namespace Mane.Unity.SoundManeger
         private readonly object _sfxTokenLock = new();
         private readonly ConcurrentBag<AudioClip> _activeSfx = new();
         private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
-        private readonly ConcurrentDictionary<string, ConcurrentQueue<float>> _limitedSfxTimings = new(100, 100);
+        private readonly ConcurrentDictionary<AudioClip, ConcurrentQueue<float>> _limitedSfxTimings = new(1, 100);
 
         private float _lastCleanupTime;
 
@@ -665,7 +665,7 @@ namespace Mane.Unity.SoundManeger
         /// <param name="duck">Ducking type.</param>
         public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None)
         {
-            if (_mixer == null || clip == null || !IsSoundPlayingAvailable(clip) || _sfxSource == null)
+            if (_mixer == null || clip == null || _sfxSource == null || !IsSoundPlayingAvailable(clip))
                 return;
 
             // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
@@ -965,66 +965,37 @@ namespace Mane.Unity.SoundManeger
 
         private bool IsSoundPlayingAvailable(AudioClip audioClip)
         {
-            string clipName = audioClip.name;
             float currentTime = Time.unscaledTime;
 
             // Try to get existing queue or create new one
-            if (!_limitedSfxTimings.TryGetValue(clipName, out var times))
-            {
-                times = new ConcurrentQueue<float>();
-                if (!_limitedSfxTimings.TryAdd(clipName, times))
-                {
-                    // Another thread won the race, get their queue
-                    if (!_limitedSfxTimings.TryGetValue(clipName, out times))
-                        return true; // Extremely rare race condition, allow the sound
-                }
-            }
+            ConcurrentQueue<float> times = _limitedSfxTimings.GetOrAdd(audioClip, _ => new ConcurrentQueue<float>());
 
             // Cleanup old timings that are beyond the clip length
             while (times.TryPeek(out float oldestTime) && currentTime - oldestTime >= audioClip.length)
-            {
                 times.TryDequeue(out _);
-            }
 
-            // If queue is empty after cleanup, remove it from dictionary
-            if (times.IsEmpty)
-            {
-                _limitedSfxTimings.TryRemove(clipName, out _);
-                times.Enqueue(currentTime);
-                return true;
-            }
-
-            // If we have less sounds than maximum allowed, add new timing
-            if (times.Count < _maxSameSoundsCount)
+            // If we have less sounds than maximum allowed (one is always allowed), add new timing
+            if (times.IsEmpty || times.Count < _maxSameSoundsCount)
             {
                 times.Enqueue(currentTime);
                 return true;
             }
 
-            // Check if we can play another instance
-            if (times.TryPeek(out float firstTime))
-            {
-                if (currentTime - firstTime < audioClip.length)
-                    return false;
-                
-                times.TryDequeue(out _);
-                times.Enqueue(currentTime);
-                return true;
-            }
-
+            // Every timing left is younger than the clip, so the limit is reached
             return false;
         }
 
         private void CleanupSfxTimings()
         {
             float currentTime = Time.unscaledTime;
-            
+
             foreach (var kvp in _limitedSfxTimings)
             {
                 var times = kvp.Value;
-                
-                // Remove all expired timings
-                while (times.TryPeek(out float oldestTime) && currentTime - oldestTime >= _sfxTimingsCleanupThreshold)
+
+                // Remove the timings of finished plays (all of them for a destroyed clip)
+                float length = kvp.Key ? kvp.Key.length : 0f;
+                while (times.TryPeek(out float oldestTime) && currentTime - oldestTime >= length)
                     times.TryDequeue(out _);
                 
                 // Remove empty queues

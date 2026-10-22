@@ -26,6 +26,9 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - Removed the legacy `com.manefunction.utils` dependency.
 - Removed support for Unity versions older than the latest patch of the earliest Unity 6 LTS (6.0.81).
 
+### Fixed
+- `Max Same Sounds Count` was never applied: when the timings of a clip expired, its queue was removed and the new timing went into a queue nothing tracked, so every sound effect played. The limit is now kept per clip asset instead of per clip name, so two clips with the same name no longer share it, and a sound effect that is not played (no SFX source) is no longer counted.
+
 ## [1.6.1] - 2025-04-08
 ### Added
 - Made `SoundManeger` disposable.
