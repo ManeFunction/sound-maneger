@@ -4,12 +4,23 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace Mane.Unity.SoundManeger
 {
+    /// <summary>
+    /// Handles <see cref="AddressablesMusicLink.ShouldReleaseHandler"/>.
+    /// </summary>
+    /// <param name="musicHandler">Handle to release. Can be invalid (nothing to release).</param>
     public delegate void MusicLinkHandler(AsyncOperationHandle<AudioClip> musicHandler);
 
+    /// <summary>
+    /// Holds the Addressables handle of one loaded clip for its GameObject, and asks for its release
+    /// when another handle is bound or the GameObject is destroyed. <see cref="AddressablesMusicLoader"/> adds it to the owner.
+    /// </summary>
     public class AddressablesMusicLink : MonoBehaviour
     {
         private AsyncOperationHandle<AudioClip> _handler;
 
+        /// <summary>
+        /// Raised with the handle that should be released: the previous one on <see cref="Bind"/>, the current one on destroy.
+        /// </summary>
         public event MusicLinkHandler ShouldReleaseHandler;
         
         /// <summary>

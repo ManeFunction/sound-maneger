@@ -8,6 +8,11 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace Mane.Unity.SoundManeger
 {
+    /// <summary>
+    /// <see cref="IMusicLoader"/> that loads clips by Addressables address. Available when the Addressables package is installed.
+    /// Each loaded clip is held by an <see cref="AddressablesMusicLink"/> on the owner's GameObject and released
+    /// when the owner is destroyed, so every clip loaded for an owner stays in memory until then.
+    /// </summary>
     public class AddressablesMusicLoader : IMusicLoader
     {
         /// <summary>
@@ -15,6 +20,7 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public bool ShouldRetry => true;
 
+        /// <inheritdoc />
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path)) return null;

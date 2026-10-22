@@ -4,6 +4,10 @@ using UnityEngine;
 
 namespace Mane.Unity.SoundManeger
 {
+    /// <summary>
+    /// Default <see cref="IMusicLoader"/>: loads clips from <c>Resources</c> folders with <see cref="Resources.LoadAsync{T}(string)"/>.
+    /// Paths are relative to a <c>Resources</c> folder, without the file extension. The owner is not used.
+    /// </summary>
     public class ResourcesMusicLoader : IMusicLoader
     {
         /// <summary>
@@ -11,6 +15,7 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public bool ShouldRetry => false;
 
+        /// <inheritdoc />
         public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path)) return null;

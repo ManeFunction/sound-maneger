@@ -13,6 +13,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 ### Added
 - Added dependencies to [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git).
 - The inspector uses the `ManeStyle` layout from ManeTools-Unity.
+- Added summary docs for all public methods and classes, and tooltips for all inspector settings. Docs that did not match the behavior were corrected (`AudioPaused`, `ContinueAudioOnPause`, `TransitionTime`, the playlist `first` parameter, `StopSfx` and `StopVoice`).
 
 ### Changed
 - BREAKING CHANGE: Namespace was changed from `Mane.SoundManeger` to `Mane.Unity.SoundManeger`.

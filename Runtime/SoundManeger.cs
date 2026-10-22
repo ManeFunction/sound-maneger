@@ -11,6 +11,14 @@ using UnityEngine.Audio;
 
 namespace Mane.Unity.SoundManeger
 {
+    /// <summary>
+    /// Audio manager singleton. Music plays on two sources crossfaded by <see cref="AudioMixer"/> snapshots,
+    /// as a single looped track or a playlist. Sound effects can duck the music or all other sounds,
+    /// with a limit of simultaneous copies of the same clip. Clips are passed directly or loaded by path
+    /// through an <see cref="IMusicLoader"/> (<see cref="ResourcesMusicLoader"/> by default).
+    /// Put the package prefab into your first scene, or let <see cref="UnitySingleton{T}.Instance"/>
+    /// create a manager with default sources.
+    /// </summary>
     [ManeStyle]
     [AddComponentMenu("Mane Tools/Audio/Sound Maneger")]
     [DisallowMultipleComponent]
@@ -18,17 +26,45 @@ namespace Mane.Unity.SoundManeger
     [DefaultExecutionOrder(-1000)]
     public class SoundManeger : UnitySingleton<SoundManeger>, IDisposable
     {
+        /// <summary>
+        /// Order of the tracks in a playlist.
+        /// </summary>
         public enum PlayingOrder
         {
+            /// <summary>
+            /// Tracks play in the given order.
+            /// </summary>
             Default,
+
+            /// <summary>
+            /// Every next track is picked at random, never the same one twice in a row.
+            /// </summary>
             Random,
+
+            /// <summary>
+            /// The playlist is shuffled after every cycle, and a cycle never starts with the track that ended the last one.
+            /// </summary>
             Shuffle
         }
 
+        /// <summary>
+        /// Which sounds a sound effect ducks (turns down) while it plays.
+        /// </summary>
         public enum DuckType
         {
+            /// <summary>
+            /// No ducking.
+            /// </summary>
             None = 0,
+
+            /// <summary>
+            /// Ducks the music.
+            /// </summary>
             MusicOnly = 1,
+
+            /// <summary>
+            /// Ducks the music and the other sound effects.
+            /// </summary>
             AllSources = 2,
         }
 
@@ -56,10 +92,15 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private AudioSource _duckAllSource;
         
         [Header("Settings")]
+        [Tooltip("Crossfade time in seconds between music tracks.")]
         [SerializeField] private float _transitionTime = 1.5f;
+        [Tooltip("Time in seconds to turn the music lowpass on or off.")]
         [SerializeField] private float _lowpassTime = 0.4f;
+        [Tooltip("Order of playlist tracks, unless a PlayMusic call sets another one.")]
         [SerializeField] private PlayingOrder _playlistPlayingOrder = PlayingOrder.Default;
+        [Tooltip("How many copies of the same sound effect can play at once.")]
         [SerializeField] private int _maxSameSoundsCount = 3;
+        [Tooltip("Keep the manager's audio playing while AudioListener.pause is set.")]
         [SerializeField] private bool _continueAudioOnPause = true;
 
         [Header("Optimization")]
@@ -67,6 +108,7 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private float _sfxTimingsCleanupThreshold = 60f;
         [Tooltip("How many different sound effect clips are protected from unloading while they play.")]
         [SerializeField] private int _maxConcurrentSfx = 100;
+        [Tooltip("How long, in seconds, a music load waits for the one before it.")]
         [SerializeField] private float _loadingTimeout = 30f;
         [Tooltip("Delay in seconds before retrying music loading if it failed. Only applies to loaders that support retrying.")]
         [SerializeField] private float _musicRetryDelay = 5f;
@@ -92,6 +134,9 @@ namespace Mane.Unity.SoundManeger
 
         private Coroutine _transitionAwaiter;
 
+        /// <summary>
+        /// Raised when the current playlist track has ended and the next one starts.
+        /// </summary>
         public event Action PlaylistTrackChange;
 
 
@@ -121,8 +166,8 @@ namespace Mane.Unity.SoundManeger
         private bool _isDisposed;
 
         /// <summary>
-        /// Set whether audio should continue playing when the game is paused.
-        /// This affects both Time.timeScale = 0 and AudioListener.pause states.
+        /// Whether the manager's music, sound effects and voice keep playing while <see cref="AudioListener.pause"/>
+        /// is set (for example, with <see cref="AudioPaused"/>). <see cref="Time.timeScale"/> never affects them.
         /// </summary>
         public bool ContinueAudioOnPause
         {
@@ -136,7 +181,8 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Pause or unpause all audio. This is separate from Unity's Time.timeScale.
+        /// Pauses or unpauses the game audio through <see cref="AudioListener.pause"/>, separately from
+        /// <see cref="Time.timeScale"/>. The manager's own sources keep playing while <see cref="ContinueAudioOnPause"/> is on.
         /// </summary>
         public bool AudioPaused
         {
@@ -144,6 +190,10 @@ namespace Mane.Unity.SoundManeger
             set => AudioListener.pause = value;
         }
 
+        /// <summary>
+        /// Registers the manager (a copy loaded later destroys itself), looks up the mixer snapshots
+        /// and creates the audio sources if none are assigned. Overrides should call <c>base.Awake()</c> first.
+        /// </summary>
         protected override void Awake()
         {
             base.Awake();
@@ -268,16 +318,38 @@ namespace Mane.Unity.SoundManeger
             return true;
         }
 
+        /// <summary>
+        /// Mixer the manager plays through. Null when it is missing or has no <c>Music1</c> / <c>Music2</c> snapshots.
+        /// </summary>
         public AudioMixer Mixer => _mixer;
 
+        /// <summary>
+        /// The <see cref="AudioListener"/> of the manager prefab, or null if none is assigned.
+        /// </summary>
         public AudioListener Listener => _listener;
 
+        /// <summary>
+        /// Mixer group (<c>Master/BGM/MusicAdd</c>) for your own music sources, so they follow the music volume.
+        /// Null without a mixer or such a group.
+        /// </summary>
         public AudioMixerGroup MusicGroup => FindGroup("Master/BGM/MusicAdd");
 
+        /// <summary>
+        /// Mixer group (<c>Master/SFX/Effects</c>) for your own sound effect sources.
+        /// Null without a mixer or such a group.
+        /// </summary>
         public AudioMixerGroup SfxGroup => FindGroup("Master/SFX/Effects");
 
+        /// <summary>
+        /// Mixer group (<c>Master/SFX/FadeBgm</c>) for your own sources that duck the music, like <see cref="DuckType.MusicOnly"/>.
+        /// Null without a mixer or such a group.
+        /// </summary>
         public AudioMixerGroup SfxDuckMusicGroup => FindGroup("Master/SFX/FadeBgm");
 
+        /// <summary>
+        /// Mixer group (<c>Master/SFX/FadeAll</c>) for your own sources that duck the music and the other sound effects,
+        /// like <see cref="DuckType.AllSources"/>. Null without a mixer or such a group.
+        /// </summary>
         public AudioMixerGroup SfxDuckAllGroup => FindGroup("Master/SFX/FadeAll");
 
         private AudioMixerGroup FindGroup(string path) =>
@@ -285,7 +357,8 @@ namespace Mane.Unity.SoundManeger
 
 
         /// <summary>
-        /// Transition time between music tracks (applied only for manual track switching, not for a playlist).
+        /// Crossfade time in seconds between music tracks. A playlist track starts after the previous one has ended,
+        /// so for it this is a fade-in.
         /// </summary>
         public float TransitionTime
         {
@@ -299,7 +372,7 @@ namespace Mane.Unity.SoundManeger
         public bool IsMusicPlaying => _musicSource1.isPlaying || _musicSource2.isPlaying;
         
         /// <summary>
-        /// Mute all music.
+        /// Mutes the music, keeping <see cref="BgmVolume"/>. Playlist tracks do not change while the music is muted.
         /// </summary>
         public bool MuteMusic
         {
@@ -313,7 +386,7 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Mute all sound effects.
+        /// Mutes the sound effects and voice, keeping <see cref="SfxVolume"/>.
         /// </summary>
         public bool MuteSfx
         {
@@ -326,7 +399,7 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Set the volume between 0f and 1f, what depends on range from -80 to 20 in mixer.
+        /// Master volume from 0 to 1, mapped linearly to -80..+20 dB in the mixer (0.8 is 0 dB). Reads 0 without a mixer.
         /// </summary>
         public float MasterVolume
         {
@@ -335,7 +408,8 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Set the volume between 0f and 1f, what depends on range from -80 to 20 in mixer.
+        /// Music volume from 0 to 1, mapped linearly to -80..+20 dB in the mixer (0.8 is 0 dB).
+        /// Keeps its value while <see cref="MuteMusic"/> is on and applies again on unmute.
         /// </summary>
         public float BgmVolume
         {
@@ -350,7 +424,8 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Set the volume between 0f and 1f, what depends on range from -80 to 20 in mixer.
+        /// Sound effects and voice volume from 0 to 1, mapped linearly to -80..+20 dB in the mixer (0.8 is 0 dB).
+        /// Keeps its value while <see cref="MuteSfx"/> is on and applies again on unmute.
         /// </summary>
         public float SfxVolume
         {
@@ -393,10 +468,11 @@ namespace Mane.Unity.SoundManeger
         
         
         /// <summary>
-        /// Set music loader. Use for your own implementation or create a standard AddressableMusicLoader.
-        /// ResourcesMusicLoader is used by default.
+        /// Sets the loader for every clip loaded by path (music, sound effects and voice).
+        /// <see cref="ResourcesMusicLoader"/> is used by default; use <c>AddressablesMusicLoader</c>
+        /// (available with the Addressables package) or your own <see cref="IMusicLoader"/>.
         /// </summary>
-        /// <param name="musicLoader">Music loader to use.</param>
+        /// <param name="musicLoader">Loader to use. Null is ignored.</param>
         public void SetMusicLoader(IMusicLoader musicLoader)
         {
             if (musicLoader == null) return;
@@ -406,9 +482,10 @@ namespace Mane.Unity.SoundManeger
 
 
         /// <summary>
-        /// Enable or disable lowpass filter on music.
+        /// Turns the lowpass filter on the music on or off, over the inspector's lowpass time. It stays on across track changes.
+        /// Does nothing when the mixer has no <c>Music1Lowpass</c> / <c>Music2Lowpass</c> snapshots.
         /// </summary>
-        /// <param name="enable">Enable or disable.</param>
+        /// <param name="enable">True to turn the lowpass on.</param>
         public void Lowpass(bool enable)
         {
             if (_lowpass == enable || !HasLowpass) return;
@@ -431,9 +508,10 @@ namespace Mane.Unity.SoundManeger
 
         
         /// <summary>
-        /// Play a single music track.
+        /// Plays a single looped music track, crossfading from the current one, and stops a running playlist.
+        /// Cancels music that is still loading from earlier calls.
         /// </summary>
-        /// <param name="clip">Track to play.</param>
+        /// <param name="clip">Track to play. Null does nothing.</param>
         public void PlayMusic(AudioClip clip)
         {
             if (clip == null) return;
@@ -443,20 +521,23 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Load and play a single music track.
+        /// Loads and plays a single looped music track, like <see cref="PlayMusic(AudioClip)"/>.
+        /// Cancels music that is still loading from earlier calls. If the track fails to load, the music stays as it was.
         /// </summary>
-        /// <param name="owner">Track loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="path">Path to the track.</param>
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> releases it when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="path">Path of the track for the current <see cref="IMusicLoader"/>.</param>
         public async void PlayMusic(MonoBehaviour owner, string path) =>
             await LoadSingleTrack(StartMusicRequest(), owner, path);
 
         /// <summary>
-        /// Play a playlist.
+        /// Plays a playlist in the inspector's playing order, or a single looped track when <paramref name="playlist"/> is empty.
+        /// Cancels music that is still loading from earlier calls. The next track is preloaded while the current one plays,
+        /// and a track that fails to load is skipped.
         /// </summary>
-        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
-        /// <param name="first">First track to play.</param>
-        /// <param name="playlist">Playlist to play.</param>
+        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="firstTrackIsIntro">If true, <paramref name="first"/> plays once before the playlist.</param>
+        /// <param name="first">The intro, or else the first entry of the playlist (with Random or Shuffle order it can play at any position).</param>
+        /// <param name="playlist">The other tracks.</param>
         public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string first, params string[] playlist)
         {
             if (string.IsNullOrEmpty(first)) return;
@@ -485,11 +566,13 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Play a playlist.
+        /// Plays a playlist in the inspector's playing order, or a single looped track when it has one entry.
+        /// Cancels music that is still loading from earlier calls. The next track is preloaded while the current one plays,
+        /// and a track that fails to load is skipped.
         /// </summary>
-        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
-        /// <param name="playlist">Playlist to play.</param>
+        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="firstTrackIsIntro">If true, the first entry plays once before the others.</param>
+        /// <param name="playlist">Paths of the tracks. Null or empty does nothing.</param>
         public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string[] playlist)
         {
             // empty call
@@ -520,13 +603,14 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Play a playlist.
+        /// Plays a playlist in the given order, like <see cref="PlayMusic(MonoBehaviour, bool, string, string[])"/>.
+        /// The order also becomes the default for later playlists.
         /// </summary>
-        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="playingOrder">Order of playing tracks. Default order keeps the order as is. Random order is completely randomized. Shuffle shuffles the list after every cycle. Both shuffle and random are guarantee NOT to play the same track twice in a row.</param>
-        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
-        /// <param name="first">First track to play.</param>
-        /// <param name="playlist">Playlist to play.</param>
+        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>.</param>
+        /// <param name="firstTrackIsIntro">If true, <paramref name="first"/> plays once before the playlist.</param>
+        /// <param name="first">The intro, or else the first entry of the playlist (with Random or Shuffle order it can play at any position).</param>
+        /// <param name="playlist">The other tracks.</param>
         public void PlayMusic(MonoBehaviour owner, PlayingOrder playingOrder,
             bool firstTrackIsIntro, string first, params string[] playlist)
         {
@@ -536,12 +620,13 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Start a playlist.
+        /// Plays a playlist in the given order, like <see cref="PlayMusic(MonoBehaviour, bool, string[])"/>.
+        /// The order also becomes the default for later playlists.
         /// </summary>
-        /// <param name="owner">Playlist loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="playingOrder">Order of playing tracks. Default order keeps the order as is. Random order is completely randomized. Shuffle shuffles the list after every cycle. Both shuffle and random are guarantee NOT to play the same track twice in a row.</param>
-        /// <param name="firstTrackIsIntro">If true, first track will be played only once.</param>
-        /// <param name="playlist">Playlist to play.</param>
+        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>.</param>
+        /// <param name="firstTrackIsIntro">If true, the first entry plays once before the others.</param>
+        /// <param name="playlist">Paths of the tracks. Null or empty does nothing.</param>
         public void PlayMusic(MonoBehaviour owner, PlayingOrder playingOrder, bool firstTrackIsIntro, string[] playlist)
         {
             _playlistPlayingOrder = playingOrder;
@@ -550,7 +635,7 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Stop playing music.
+        /// Stops the music and the playlist at once (no fade-out), and cancels music that is still loading.
         /// </summary>
         public void StopMusic()
         {
@@ -809,10 +894,11 @@ namespace Mane.Unity.SoundManeger
 
 
         /// <summary>
-        /// Play a sound effect.
+        /// Plays a sound effect, unless the same clip already plays <c>Max Same Sounds Count</c> times.
+        /// The clip is protected from <see cref="Resources.UnloadUnusedAssets"/> until it ends.
         /// </summary>
-        /// <param name="clip">Sound effect to play.</param>
-        /// <param name="duck">Ducking type.</param>
+        /// <param name="clip">Sound effect to play. Null does nothing.</param>
+        /// <param name="duck">What the sound effect ducks. Without the matching duck source it plays without ducking.</param>
         public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None)
         {
             if (_mixer == null || clip == null || _sfxSource == null || !IsSoundPlayingAvailable(clip))
@@ -845,16 +931,16 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Load and play a sound effect.
+        /// Loads and plays a sound effect, like <see cref="PlaySfx(AudioClip, DuckType)"/>. A failed load is not retried.
         /// </summary>
-        /// <param name="owner">Sound effect loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="path">Path to the sound effect.</param>
-        /// <param name="duck">Ducking type.</param>
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> releases it when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="path">Path of the sound effect for the current <see cref="IMusicLoader"/>.</param>
+        /// <param name="duck">What the sound effect ducks.</param>
         public async void PlaySfx(MonoBehaviour owner, string path, DuckType duck = DuckType.None) => 
             PlaySfx(await GetClip(owner, path, false), duck);
 
         /// <summary>
-        /// Stop all sound effects.
+        /// Stops all sound effects, and the voice too, because it plays on the music-ducking source.
         /// </summary>
         public void StopSfx()
         {
@@ -868,10 +954,11 @@ namespace Mane.Unity.SoundManeger
 
 
         /// <summary>
-        /// Play a voice. Voice is played on the same source as sfx, but fades out music automatically, based on voice volume.
+        /// Plays a voice line on the music-ducking source, so the music fades out while it plays, depending on its volume.
+        /// A new voice line replaces the playing one. Does nothing without the duck BGM source.
         /// </summary>
-        /// <param name="clip">Voice clip to play.</param>
-        /// <param name="delay">Delay before playing.</param>
+        /// <param name="clip">Voice clip to play. Null does nothing.</param>
+        /// <param name="delay">Delay in seconds before it starts.</param>
         public void PlayVoice(AudioClip clip, float delay = 0)
         {
             if (clip == null || _duckBgmSource == null)
@@ -885,14 +972,14 @@ namespace Mane.Unity.SoundManeger
         }
         
         /// <summary>
-        /// Load and play a voice. Voice is played on the same source as sfx, but fades out music automatically, based on voice volume.
+        /// Loads and plays a voice line, like <see cref="PlayVoice(AudioClip, float)"/>. A failed load is not retried.
         /// </summary>
-        /// <param name="owner">Voice loading owner. If null, SoundManeger.Instance will be used.</param>
-        /// <param name="path">Path to the voice clip.</param>
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> releases it when the owner is destroyed. If null, the manager is used.</param>
+        /// <param name="path">Path of the voice clip for the current <see cref="IMusicLoader"/>.</param>
         public async void PlayVoice(MonoBehaviour owner, string path) => PlayVoice(await GetClip(owner, path, false));
         
         /// <summary>
-        /// Stop playing voice.
+        /// Stops the voice, and the sound effects played with <see cref="DuckType.MusicOnly"/> too, because they share its source.
         /// </summary>
         public void StopVoice()
         {
@@ -1143,12 +1230,19 @@ namespace Mane.Unity.SoundManeger
             }
         }
 
+        /// <summary>
+        /// Clears the singleton instance and calls <see cref="Dispose"/>.
+        /// </summary>
         protected override void OnDestroy()
         {
             base.OnDestroy();
             Dispose();
         }
 
+        /// <summary>
+        /// Cancels pending loads, stops the playlist and forgets the sound effects bookkeeping. Called on destroy.
+        /// After it, the manager no longer loads clips by path.
+        /// </summary>
         public void Dispose()
         {
             if (_isDisposed) return;
