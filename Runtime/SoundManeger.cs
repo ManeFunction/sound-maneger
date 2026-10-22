@@ -158,15 +158,18 @@ namespace Mane.Unity.SoundManeger
 
         private void ConfigureAudioSources()
         {
-            _musicSource1.ignoreListenerPause = _continueAudioOnPause;
-            _musicSource2.ignoreListenerPause = _continueAudioOnPause;
-            
-            _sfxSource.ignoreListenerPause = _continueAudioOnPause;
-            if (_duckBgmSource != null)
-                _duckBgmSource.ignoreListenerPause = _continueAudioOnPause;
-            if (_duckAllSource != null)
-                _duckAllSource.ignoreListenerPause = _continueAudioOnPause;
-        }        
+            ConfigureAudioSource(_musicSource1);
+            ConfigureAudioSource(_musicSource2);
+            ConfigureAudioSource(_sfxSource);
+            ConfigureAudioSource(_duckBgmSource);
+            ConfigureAudioSource(_duckAllSource);
+        }
+
+        private void ConfigureAudioSource(AudioSource source)
+        {
+            if (source != null)
+                source.ignoreListenerPause = _continueAudioOnPause;
+        }
         
         private void FillMixerStuff()
         {
@@ -213,7 +216,7 @@ namespace Mane.Unity.SoundManeger
             }
 
             if (_duckBgmSource == null)
-                Debug.LogWarning("[SoundManeger] Missing duck BGM source! Duck BGM feature will be disabled.");
+                Debug.LogWarning("[SoundManeger] Missing duck BGM source! Duck BGM and voice features will be disabled.");
 
             if (_duckAllSource == null)
                 Debug.LogWarning("[SoundManeger] Missing duck all source! Duck all feature will be disabled.");
@@ -708,9 +711,12 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public void StopSfx()
         {
-            _sfxSource.Stop();
-            _duckBgmSource.Stop();
-            _duckAllSource.Stop();
+            if (_sfxSource != null)
+                _sfxSource.Stop();
+            if (_duckBgmSource != null)
+                _duckBgmSource.Stop();
+            if (_duckAllSource != null)
+                _duckAllSource.Stop();
         }
 
 
@@ -721,6 +727,9 @@ namespace Mane.Unity.SoundManeger
         /// <param name="delay">Delay before playing.</param>
         public void PlayVoice(AudioClip clip, float delay = 0)
         {
+            if (clip == null || _duckBgmSource == null)
+                return;
+
             _duckBgmSource.clip = clip;
             if (delay > 0)
                 _duckBgmSource.PlayDelayed(delay);
@@ -738,7 +747,11 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Stop playing voice.
         /// </summary>
-        public void StopVoice() => _duckBgmSource.Stop();
+        public void StopVoice()
+        {
+            if (_duckBgmSource != null)
+                _duckBgmSource.Stop();
+        }
 
         
         private void PlayMusicClip(AudioClip clip)
