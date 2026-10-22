@@ -701,9 +701,10 @@ namespace Mane.Unity.SoundManeger
                 if (_playlistPointer >= _playlist.Count)
                 {
                     _playlistPointer = 0;
-                    if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Count > 1)
+                    var lastTrack = _playlist.Last();
+                    // A list of one repeated track cannot start with another one
+                    if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Exists(track => track != lastTrack))
                     {
-                        var lastTrack = _playlist.Last();
                         do
                         {
                             _playlist.Shuffle(_random);
