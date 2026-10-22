@@ -416,7 +416,7 @@ namespace Mane.Unity.SoundManeger
             if (string.IsNullOrEmpty(first)) return;
 
             // single track
-            if (playlist == null || playlist.Length == 0)
+            if (playlist.IsNullOrEmpty())
             {
                 PlayMusic(await GetClip(owner, first, true));
 
@@ -442,7 +442,7 @@ namespace Mane.Unity.SoundManeger
         public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string[] playlist)
         {
             // empty call
-            if (playlist == null || playlist.Length == 0) return;
+            if (playlist.IsNullOrEmpty()) return;
 
             // single track
             if (playlist.Length == 1)
@@ -761,8 +761,7 @@ namespace Mane.Unity.SoundManeger
                     _musicSource2.Play();
                     _music2Snapshot.TransitionTo(_transitionTime);
                     _activeFirstMusicSource = false;
-                    if (_transitionAwaiter != null)
-                        StopCoroutine(_transitionAwaiter);
+                    this.TryKillCoroutine(ref _transitionAwaiter);
                     _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource1, _transitionTime));
                 }
                 else
@@ -773,8 +772,7 @@ namespace Mane.Unity.SoundManeger
                     _musicSource1.Play();
                     _music1Snapshot.TransitionTo(_transitionTime);
                     _activeFirstMusicSource = true;
-                    if (_transitionAwaiter != null)
-                        StopCoroutine(_transitionAwaiter);
+                    this.TryKillCoroutine(ref _transitionAwaiter);
                     _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource2, _transitionTime));
                 }
             }
@@ -894,9 +892,7 @@ namespace Mane.Unity.SoundManeger
             }
             catch (OperationCanceledException)
             {
-#if UNITY_EDITOR
-                Debug.LogWarning($"[SoundManeger] Loading was canceled: {path}");
-#endif
+                EditorDebug.LogWarning($"[SoundManeger] Loading was canceled: {path}");
                 return null;
             }
             catch (Exception e)
