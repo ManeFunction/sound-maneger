@@ -11,7 +11,8 @@ using UnityEngine.Audio;
 
 namespace Mane.Unity.SoundManeger
 {
-    [AddComponentMenu("Audio/Sound Manager")]
+    [ManeStyle]
+    [AddComponentMenu("Mane Tools/Audio/Sound Maneger")]
     [DisallowMultipleComponent]
     public class SoundManeger : UnitySingleton<SoundManeger>, IDisposable
     {
