@@ -60,6 +60,7 @@ namespace Mane.Unity.SoundManeger
         [Header("Optimization")]
         [Tooltip("How often, in seconds, the manager forgets sound effects that have finished playing.")]
         [SerializeField] private float _sfxTimingsCleanupThreshold = 60f;
+        [Tooltip("How many different sound effect clips are protected from unloading while they play.")]
         [SerializeField] private int _maxConcurrentSfx = 100;
         [SerializeField] private float _loadingTimeout = 30f;
         [Tooltip("Delay in seconds before retrying loading if it failed. Only applies to loaders that support retrying.")]
@@ -99,10 +100,9 @@ namespace Mane.Unity.SoundManeger
         private float _cachedBgmVolume = .8f;
         private float _cachedSfxVolume = .8f;
 
-        // used to keep active clips and prevent unloading while playing
         private readonly object _sfxTokenLock = new();
-        private readonly ConcurrentBag<AudioClip> _activeSfx = new();
-        private readonly ConcurrentDictionary<AudioClip, Coroutine> _activeSfxCoroutines = new();
+        // Clips of playing SFX with the time they finish, so UnloadUnusedAssets() cannot unload them mid-play
+        private readonly ConcurrentDictionary<AudioClip, float> _playingSfx = new();
         private readonly ConcurrentDictionary<AudioClip, ConcurrentQueue<float>> _limitedSfxTimings = new(1, 100);
 
         private float _lastCleanupTime;
@@ -669,7 +669,7 @@ namespace Mane.Unity.SoundManeger
                 return;
 
             // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
-            StartCoroutine(SfxCache(clip));
+            KeepAlive(clip);
 
             // Play sound based on duck type with null checks
             switch (duck)
@@ -936,31 +936,18 @@ namespace Mane.Unity.SoundManeger
                 PlaylistTrackChange?.Invoke();
         }
         
-        private IEnumerator SfxCache(AudioClip clip)
+        private void KeepAlive(AudioClip clip)
         {
-            if (_activeSfxCoroutines.TryGetValue(clip, out var existingCoroutine))
+            if (!_playingSfx.ContainsKey(clip) && _playingSfx.Count >= _maxConcurrentSfx)
             {
-                StopCoroutine(existingCoroutine);
-                _activeSfxCoroutines.TryRemove(clip, out _);
+                CleanupActiveSfx();
+
+                // Still full: the sound plays, but is not protected from unloading
+                if (_playingSfx.Count >= _maxConcurrentSfx)
+                    return;
             }
 
-            _activeSfx.Add(clip);
-            _activeSfxCoroutines[clip] = StartCoroutine(SfxCacheInternal(clip));
-            
-            yield break;
-        }
-
-        private IEnumerator SfxCacheInternal(AudioClip clip)
-        {
-            try
-            {
-                yield return new WaitForSecondsRealtime(clip.length);
-            }
-            finally
-            {
-                _activeSfx.TryTake(out _);
-                _activeSfxCoroutines.TryRemove(clip, out _);
-            }
+            _playingSfx[clip] = Time.unscaledTime + clip.length;
         }
 
         private bool IsSoundPlayingAvailable(AudioClip audioClip)
@@ -1006,21 +993,13 @@ namespace Mane.Unity.SoundManeger
 
         private void CleanupActiveSfx()
         {
-            // Cleanup interrupted coroutines
-            var currentTime = Time.unscaledTime;
-            foreach (var kvp in _activeSfxCoroutines.ToArray())
+            // Forget finished and destroyed clips
+            float currentTime = Time.unscaledTime;
+            foreach (var kvp in _playingSfx)
             {
-                if (kvp.Key == null || !kvp.Key || currentTime > kvp.Key.length * 2)
-                {
-                    _activeSfxCoroutines.TryRemove(kvp.Key, out var coroutine);
-                    if (coroutine != null)
-                        StopCoroutine(coroutine);
-                }
+                if (!kvp.Key || kvp.Value <= currentTime)
+                    _playingSfx.TryRemove(kvp.Key, out _);
             }
-
-            // Enforce max concurrent SFX limit
-            while (_activeSfx.Count > _maxConcurrentSfx)
-                _activeSfx.TryTake(out _);
         }
 
         protected override void OnDestroy()
@@ -1035,14 +1014,7 @@ namespace Mane.Unity.SoundManeger
             
             _isDisposed = true;
 
-            foreach (var coroutine in _activeSfxCoroutines.Values)
-            {
-                if (coroutine != null)
-                    StopCoroutine(coroutine);
-            }
-            _activeSfxCoroutines.Clear();
-            
-            _activeSfx.Clear();
+            _playingSfx.Clear();
             _limitedSfxTimings.Clear();
 
             _sfxCancellationSource?.Dispose();

@@ -28,6 +28,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 
 ### Fixed
 - `Max Same Sounds Count` was never applied: when the timings of a clip expired, its queue was removed and the new timing went into a queue nothing tracked, so every sound effect played. The limit is now kept per clip asset instead of per clip name, so two clips with the same name no longer share it, and a sound effect that is not played (no SFX source) is no longer counted.
+- Playing sound effects were not reliably protected from `Resources.UnloadUnusedAssets()`. The cleanup compared the game time with twice the clip length, so from the first cleanup on (a minute in) it dropped the protection of every playing clip, a finished sound effect released a random clip instead of its own, and clips over the `Max Concurrent Sfx` limit were dropped at random. Each clip is now kept until its own end time, without a coroutine per sound effect.
 
 ## [1.6.1] - 2025-04-08
 ### Added
