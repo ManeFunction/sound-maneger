@@ -41,6 +41,8 @@ On Windows, I recommend `Git Bash` (`MINGW`) for CLI work: it is a Unix-like she
 
 Drag the `SoundManeger` prefab from `Packages/Sound Maneger/Runtime` into your first scene, and you are good. It survives scene loads, and a copy in a scene that is loaded later destroys itself. Keep it a root object: Unity can only keep root objects between scenes.
 
+Or use `GameObject -> Add SoundManeger` (also in the Hierarchy context menu). It adds the prefab as a root object to the scene of the selected object, or to the active scene when nothing is selected.
+
 The prefab has its own `AudioListener`. Remove the one on your camera, or the prefab one if the listener has to follow the camera.
 
 You can also add the component from `Add Component -> Mane Tools -> Audio -> Sound Maneger`. It picks up the package mixer and creates its audio sources by itself when none are assigned. The same happens when you access `SoundManeger.Instance` with no manager in the scene.

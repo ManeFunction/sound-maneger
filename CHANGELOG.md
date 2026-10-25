@@ -13,6 +13,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 ### Added
 - Added dependencies to [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git).
 - The inspector uses the `ManeStyle` layout from ManeTools-Unity.
+- Added the `GameObject -> Add SoundManeger` menu (also in the Hierarchy context menu). It adds the package prefab as a root object to the scene of the selected object, or to the active scene when nothing is selected.
 - Added summary docs for all public methods and classes, and tooltips for all inspector settings. Docs that did not match the behavior were corrected (`AudioPaused`, `ContinueAudioOnPause`, `TransitionTime`, the playlist `first` parameter, `StopSfx` and `StopVoice`).
 
 ### Changed
