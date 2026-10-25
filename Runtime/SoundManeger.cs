@@ -84,7 +84,7 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private AudioMixer _mixer;
         [SerializeField] private AudioListener _listener;
 
-        [Header("Sources")]
+        [Foldout("Sources")]
         [SerializeField] private AudioSource _musicSource1;
         [SerializeField] private AudioSource _musicSource2;
         [SerializeField] private AudioSource _sfxSource;
