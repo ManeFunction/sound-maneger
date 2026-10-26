@@ -16,9 +16,13 @@ The package is supported starting from **Unity 6.0.81** (6000.0.81f1) and depend
 - Async loading by path through `IMusicLoader`: from `Resources` by default, from `Addressables` when the package is installed, or with your own loader. Failed music loads can be retried after a delay, and a newer call cancels the loads it makes useless.
 - A ready-to-use prefab and mixer, a `ManeStyle` inspector, and a singleton that sets itself up when there is no prefab in the scene.
 
-## Look
+## Inspector
 
-![](https://raw.githubusercontent.com/wiki/ManeFunction/sound-maneger/main.png)
+![](https://raw.githubusercontent.com/wiki/ManeFunction/sound-maneger/inspector.png)
+
+## Mixer
+
+![](https://raw.githubusercontent.com/wiki/ManeFunction/sound-maneger/mixer.png)
 
 ## Installation
 
