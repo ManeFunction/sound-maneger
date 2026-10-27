@@ -96,7 +96,7 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private float _transitionTime = 1.5f;
         [Tooltip("Time in seconds to turn the music lowpass on or off.")]
         [SerializeField] private float _lowpassTime = 0.4f;
-        [Tooltip("Order of playlist tracks, unless a PlayMusic call sets another one.")]
+        [Tooltip("Order of playlist tracks, unless a PlayPlaylist call sets another one for its playlist.")]
         [SerializeField] private PlayingOrder _playlistPlayingOrder = PlayingOrder.Default;
         [Tooltip("How many copies of the same sound effect can play at once.")]
         [SerializeField] private int _maxSameSoundsCount = 3;
@@ -139,6 +139,8 @@ namespace Mane.Unity.SoundManeger
 
 
         private List<string> _playlist;
+        // Order of the running playlist, set when it starts
+        private PlayingOrder _activePlayingOrder;
         private int _playlistPointer;
         private AudioClip _nextPlaylistTrack;
         // Music clips loaded by path, with the loader to release them with (a clip loaded twice is listed twice).
@@ -367,6 +369,16 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
+        /// Order of playlist tracks for <see cref="PlayPlaylist"/> calls that do not set one. Starts with the inspector's value.
+        /// A change applies to the next playlist, not to the one that plays.
+        /// </summary>
+        public PlayingOrder PlaylistPlayingOrder
+        {
+            get => _playlistPlayingOrder;
+            set => _playlistPlayingOrder = value;
+        }
+
+        /// <summary>
         /// Indicates that music is playing.
         /// </summary>
         public bool IsMusicPlaying => _musicSource1.isPlaying || _musicSource2.isPlaying;
@@ -540,8 +552,8 @@ namespace Mane.Unity.SoundManeger
         /// <param name="tracks">Paths of the tracks. Null or empty does nothing.</param>
         /// <param name="firstTrackIsIntro">If true, the first entry plays once before the others.
         /// Otherwise it is just the first entry (with Random or Shuffle order it can play at any position).</param>
-        /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>. It also becomes the default for later playlists.
-        /// If null, the current order is kept (the inspector's one, unless an earlier call changed it).</param>
+        /// <param name="playingOrder">Order of the tracks of this playlist only, see <see cref="PlayingOrder"/>.
+        /// If null, <see cref="PlaylistPlayingOrder"/> is used.</param>
         /// <returns>True once the intro, the first track or the only track plays. False if the list is null or empty,
         /// a newer music call replaced it, the music is disabled (no mixer), or the first track failed to load
         /// (the playlist then still moves on to the next one).</returns>
@@ -551,9 +563,7 @@ namespace Mane.Unity.SoundManeger
             // empty call
             if (tracks == null || tracks.Count == 0) return false;
 
-            if (playingOrder.HasValue)
-                _playlistPlayingOrder = playingOrder.Value;
-
+            PlayingOrder order = playingOrder ?? _playlistPlayingOrder;
             int request = StartMusicRequest();
 
             // single track
@@ -567,10 +577,10 @@ namespace Mane.Unity.SoundManeger
                 string intro = pl[0];
                 pl.RemoveAt(0);
 
-                return await StartPlaylistAfterIntro(request, intro, pl);
+                return await StartPlaylistAfterIntro(request, intro, pl, order);
             }
 
-            return await StartPlaylist(pl, false);
+            return await StartPlaylist(pl, order, false);
         }
 
         /// <summary>
@@ -631,7 +641,8 @@ namespace Mane.Unity.SoundManeger
         }
 
         // The intro plays once and the playlist starts after it. If the intro does not play, the playlist starts at once.
-        private async Task<bool> StartPlaylistAfterIntro(int request, string intro, List<string> playlist)
+        private async Task<bool> StartPlaylistAfterIntro(int request, string intro, List<string> playlist,
+            PlayingOrder order)
         {
             AudioClip clip = await GetClip(intro, true);
             if (request != _musicRequest)
@@ -642,12 +653,12 @@ namespace Mane.Unity.SoundManeger
 
             bool introPlays = clip != null && PlaySingleTrack(clip);
 
-            return await StartPlaylist(playlist, introPlays);
+            return await StartPlaylist(playlist, order, introPlays);
         }
 
 
         // True once the first track plays, or at once when it starts after the current track
-        private Task<bool> StartPlaylist(List<string> playlist, bool startAfterCurrentTrack)
+        private Task<bool> StartPlaylist(List<string> playlist, PlayingOrder order, bool startAfterCurrentTrack)
         {
             // Music is disabled without a mixer, see FillMixerStuff()
             if (_mixer == null) return Task.FromResult(false);
@@ -658,6 +669,7 @@ namespace Mane.Unity.SoundManeger
             lock (_playlistLock)
             {
                 _playlist = new List<string>(playlist); // Create defensive copy
+                _activePlayingOrder = order;
 
                 _musicSource1.loop = false;
                 _musicSource2.loop = false;
@@ -668,7 +680,7 @@ namespace Mane.Unity.SoundManeger
                 PlaylistTrackChange -= OnTrackChange;
                 PlaylistTrackChange += OnTrackChange;
             
-                switch (_playlistPlayingOrder)
+                switch (order)
                 {
                     case PlayingOrder.Default:
                         _playlistPointer = 0;
@@ -713,7 +725,7 @@ namespace Mane.Unity.SoundManeger
         // Call under _playlistLock
         private void MovePlaylistPointer()
         {
-            if (_playlistPlayingOrder == PlayingOrder.Random)
+            if (_activePlayingOrder == PlayingOrder.Random)
             {
                 if (_playlist.Count == 1)
                 {
@@ -736,7 +748,7 @@ namespace Mane.Unity.SoundManeger
                     _playlistPointer = 0;
                     var lastTrack = _playlist.Last();
                     // A list of one repeated track cannot start with another one
-                    if (_playlistPlayingOrder == PlayingOrder.Shuffle && _playlist.Exists(track => track != lastTrack))
+                    if (_activePlayingOrder == PlayingOrder.Shuffle && _playlist.Exists(track => track != lastTrack))
                     {
                         do
                         {

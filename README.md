@@ -64,7 +64,8 @@ sound.PlayMusic("Music/Menu");                    // loaded by path, then played
 sound.PlayPlaylist(new[] { "Music/Intro",         // the intro plays once,
     "Music/Level1", "Music/Level2" }, true);      // then the playlist
 sound.PlayPlaylist(new[] { "Music/A", "Music/B", "Music/C" },
-    playingOrder: SoundManeger.PlayingOrder.Shuffle);   // a shuffled playlist
+    playingOrder: SoundManeger.PlayingOrder.Shuffle);   // this playlist is shuffled
+sound.PlaylistPlayingOrder = SoundManeger.PlayingOrder.Random;   // for playlists that set no order
 sound.StopMusic();
 
 // Sound effects and voice
