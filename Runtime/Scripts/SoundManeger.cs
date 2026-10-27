@@ -527,8 +527,10 @@ namespace Mane.Unity.SoundManeger
         /// The clip is released through the loader once the track stops.
         /// </summary>
         /// <param name="path">Path of the track for the current <see cref="IClipLoader"/>.</param>
-        public async void PlayMusic(string path) =>
-            await LoadSingleTrack(StartMusicRequest(), path);
+        /// <returns>True once the track plays. False if it failed to load, a newer music call replaced it,
+        /// or the music is disabled (no mixer).</returns>
+        public Task<bool> PlayMusic(string path) =>
+            LoadSingleTrack(StartMusicRequest(), path);
 
         /// <summary>
         /// Plays a playlist, or a single looped track when it has one entry.
@@ -540,11 +542,14 @@ namespace Mane.Unity.SoundManeger
         /// Otherwise it is just the first entry (with Random or Shuffle order it can play at any position).</param>
         /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>. It also becomes the default for later playlists.
         /// If null, the current order is kept (the inspector's one, unless an earlier call changed it).</param>
-        public async void PlayPlaylist(IReadOnlyList<string> tracks, bool firstTrackIsIntro = false,
+        /// <returns>True once the intro, the first track or the only track plays. False if the list is null or empty,
+        /// a newer music call replaced it, the music is disabled (no mixer), or the first track failed to load
+        /// (the playlist then still moves on to the next one).</returns>
+        public async Task<bool> PlayPlaylist(IReadOnlyList<string> tracks, bool firstTrackIsIntro = false,
             PlayingOrder? playingOrder = null)
         {
             // empty call
-            if (tracks == null || tracks.Count == 0) return;
+            if (tracks == null || tracks.Count == 0) return false;
 
             if (playingOrder.HasValue)
                 _playlistPlayingOrder = playingOrder.Value;
@@ -553,11 +558,7 @@ namespace Mane.Unity.SoundManeger
 
             // single track
             if (tracks.Count == 1)
-            {
-                await LoadSingleTrack(request, tracks[0]);
-
-                return;
-            }
+                return await LoadSingleTrack(request, tracks[0]);
 
             // playlist
             List<string> pl = new(tracks);
@@ -565,12 +566,11 @@ namespace Mane.Unity.SoundManeger
             {
                 string intro = pl[0];
                 pl.RemoveAt(0);
-                await StartPlaylistAfterIntro(request, intro, pl);
 
-                return;
+                return await StartPlaylistAfterIntro(request, intro, pl);
             }
 
-            StartPlaylist(pl, false);
+            return await StartPlaylist(pl, false);
         }
 
         /// <summary>
@@ -607,7 +607,7 @@ namespace Mane.Unity.SoundManeger
             _musicCancellationSource = null;
         }
 
-        private void PlaySingleTrack(AudioClip clip)
+        private bool PlaySingleTrack(AudioClip clip)
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
@@ -615,41 +615,42 @@ namespace Mane.Unity.SoundManeger
             PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
 
-            PlayMusicClip(clip);
+            return PlayMusicClip(clip);
         }
 
-        private async Task LoadSingleTrack(int request, string path)
+        private async Task<bool> LoadSingleTrack(int request, string path)
         {
             AudioClip clip = await GetClip(path, true);
-            if (clip == null) return;
+            if (clip == null) return false;
 
             if (request == _musicRequest)
-                PlaySingleTrack(clip);
-            else
-                ReleaseMusic(clip);
+                return PlaySingleTrack(clip);
+
+            ReleaseMusic(clip);
+            return false;
         }
 
-        // The intro plays once and the playlist starts after it. If the intro does not load, the playlist starts at once.
-        private async Task StartPlaylistAfterIntro(int request, string intro, List<string> playlist)
+        // The intro plays once and the playlist starts after it. If the intro does not play, the playlist starts at once.
+        private async Task<bool> StartPlaylistAfterIntro(int request, string intro, List<string> playlist)
         {
             AudioClip clip = await GetClip(intro, true);
             if (request != _musicRequest)
             {
                 ReleaseMusic(clip);
-                return;
+                return false;
             }
 
-            if (clip != null)
-                PlaySingleTrack(clip);
+            bool introPlays = clip != null && PlaySingleTrack(clip);
 
-            StartPlaylist(playlist, clip != null);
+            return await StartPlaylist(playlist, introPlays);
         }
 
 
-        private void StartPlaylist(List<string> playlist, bool startAfterCurrentTrack)
+        // True once the first track plays, or at once when it starts after the current track
+        private Task<bool> StartPlaylist(List<string> playlist, bool startAfterCurrentTrack)
         {
             // Music is disabled without a mixer, see FillMixerStuff()
-            if (_mixer == null) return;
+            if (_mixer == null) return Task.FromResult(false);
 
             // Drops the previous playlist with its preloaded track
             ClearPlaylist();
@@ -684,10 +685,11 @@ namespace Mane.Unity.SoundManeger
                 }
             }
 
-            if (startAfterCurrentTrack)
-                CacheNextTrack();
-            else
-                OnTrackChange();
+            if (!startAfterCurrentTrack)
+                return ChangeTrack();
+
+            CacheNextTrack();
+            return Task.FromResult(true);
         }
 
         private void PrepareNextTrack()
@@ -795,23 +797,27 @@ namespace Mane.Unity.SoundManeger
             }
         }
 
-        private async void OnTrackChange()
+        private async void OnTrackChange() => await ChangeTrack();
+
+        // Plays the preloaded track, or loads the current one. True once a track plays
+        private async Task<bool> ChangeTrack()
         {
+            bool plays;
             if (_nextPlaylistTrack)
             {
                 AudioClip next = _nextPlaylistTrack;
                 _nextPlaylistTrack = null;
                 _failedPlaylistTracks = 0;
-                PlayMusicClip(next);
+                plays = PlayMusicClip(next);
                 PrepareNextTrack();
-                return;
+                return plays;
             }
 
             int request = _musicRequest;
             string trackPath;
             lock (_playlistLock)
             {
-                if (_playlist == null || _playlist.Count == 0) return;
+                if (_playlist == null || _playlist.Count == 0) return false;
                 trackPath = _playlist[_playlistPointer];
             }
 
@@ -819,19 +825,19 @@ namespace Mane.Unity.SoundManeger
             if (request != _musicRequest)
             {
                 ReleaseMusic(clip);
-                return;
+                return false;
             }
 
-            if (clip)
-            {
-                _failedPlaylistTracks = 0;
-                PlayMusicClip(clip);
-                PrepareNextTrack();
-            }
-            else
+            if (!clip)
             {
                 SkipFailedTrack();
+                return false;
             }
+
+            _failedPlaylistTracks = 0;
+            plays = PlayMusicClip(clip);
+            PrepareNextTrack();
+            return plays;
         }
 
         private void ClearPlaylist()
@@ -856,10 +862,13 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         /// <param name="clip">Sound effect to play. Null does nothing.</param>
         /// <param name="duck">What the sound effect ducks. Without the matching duck source it plays without ducking.</param>
-        public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None)
+        public void PlaySfx(AudioClip clip, DuckType duck = DuckType.None) => TryPlaySfx(clip, duck);
+
+        // True when the sound effect plays
+        private bool TryPlaySfx(AudioClip clip, DuckType duck)
         {
             if (_mixer == null || clip == null || _sfxSource == null || !IsSoundPlayingAvailable(clip))
-                return;
+                return false;
 
             // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
             KeepAlive(clip);
@@ -885,8 +894,10 @@ namespace Mane.Unity.SoundManeger
                     _sfxSource.PlayOneShot(clip);
                     break;
             }
+
+            return true;
         }
-        
+
         /// <summary>
         /// Loads and plays a sound effect, like <see cref="PlaySfx(AudioClip, DuckType)"/>. A failed load is not retried.
         /// </summary>
@@ -894,8 +905,10 @@ namespace Mane.Unity.SoundManeger
         /// <param name="duck">What the sound effect ducks.</param>
         /// <param name="owner">Owner of the loaded clip: <c>AddressablesClipLoader</c> keeps it loaded until the owner is destroyed.
         /// If null, the manager owns it, so it stays loaded while the manager lives.</param>
-        public async void PlaySfx(string path, DuckType duck = DuckType.None, MonoBehaviour owner = null) =>
-            PlaySfx(await GetClip(path, false, owner), duck);
+        /// <returns>True once the sound effect plays. False if it failed to load, or is not played: the same clip
+        /// already plays <c>Max Same Sounds Count</c> times, or there is no mixer or SFX source.</returns>
+        public async Task<bool> PlaySfx(string path, DuckType duck = DuckType.None, MonoBehaviour owner = null) =>
+            TryPlaySfx(await GetClip(path, false, owner), duck);
 
         /// <summary>
         /// Stops all sound effects, and the voice too, because it plays on the music-ducking source.
@@ -917,26 +930,32 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         /// <param name="clip">Voice clip to play. Null does nothing.</param>
         /// <param name="delay">Delay in seconds before it starts.</param>
-        public void PlayVoice(AudioClip clip, float delay = 0)
+        public void PlayVoice(AudioClip clip, float delay = 0) => TryPlayVoice(clip, delay);
+
+        // True when the voice line plays
+        private bool TryPlayVoice(AudioClip clip, float delay)
         {
             if (clip == null || _duckBgmSource == null)
-                return;
+                return false;
 
             _duckBgmSource.clip = clip;
             if (delay > 0)
                 _duckBgmSource.PlayDelayed(delay);
             else
                 _duckBgmSource.Play();
+
+            return true;
         }
-        
+
         /// <summary>
         /// Loads and plays a voice line, like <see cref="PlayVoice(AudioClip, float)"/>. A failed load is not retried.
         /// </summary>
         /// <param name="path">Path of the voice clip for the current <see cref="IClipLoader"/>.</param>
         /// <param name="owner">Owner of the loaded clip: <c>AddressablesClipLoader</c> keeps it loaded until the owner is destroyed.
         /// If null, the manager owns it, so it stays loaded while the manager lives.</param>
-        public async void PlayVoice(string path, MonoBehaviour owner = null) =>
-            PlayVoice(await GetClip(path, false, owner));
+        /// <returns>True once the voice line plays. False if it failed to load or there is no duck BGM source.</returns>
+        public async Task<bool> PlayVoice(string path, MonoBehaviour owner = null) =>
+            TryPlayVoice(await GetClip(path, false, owner), 0);
         
         /// <summary>
         /// Stops the voice, and the sound effects played with <see cref="DuckType.MusicOnly"/> too, because they share its source.
@@ -948,18 +967,25 @@ namespace Mane.Unity.SoundManeger
         }
 
         
-        // Takes over a loaded clip: it is released when its source lets it go, or at once when it does not play
-        private void PlayMusicClip(AudioClip clip)
+        // Takes over a loaded clip: it is released when its source lets it go, or at once when it does not play.
+        // True when the clip plays
+        private bool PlayMusicClip(AudioClip clip)
         {
-            if (clip == null) return;
+            if (clip == null) return false;
 
-            // No music without a mixer, or the clip already plays on the active source: keep it playing
-            if (_mixer == null ||
-                _musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
+            // No music without a mixer
+            if (_mixer == null)
+            {
+                ReleaseMusic(clip);
+                return false;
+            }
+
+            // The clip already plays on the active source: keep it playing
+            if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
                 _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
             {
                 ReleaseMusic(clip);
-                return;
+                return true;
             }
 
             try
@@ -990,10 +1016,11 @@ namespace Mane.Unity.SoundManeger
             catch (Exception e)
             {
                 Debug.LogError($"[SoundManeger] Failed to play music clip {clip.name}: {e.Message}");
-                return;
+                return false;
             }
-            
+
             AddMode(PlayMode.PlayingMusic);
+            return true;
         }
 
         private IEnumerator StopMusicSource(AudioSource source, float delay)

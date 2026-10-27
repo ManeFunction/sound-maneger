@@ -82,6 +82,13 @@ sound.AudioPaused = true;                         // AudioListener.pause
 sound.ContinueAudioOnPause = false;               // the manager pauses too
 ```
 
+The calls that load by path (`PlayMusic(path)`, `PlayPlaylist`, `PlaySfx(path)` and `PlayVoice(path)`) return a `Task<bool>`. Call them and forget, as above, or await the result: `true` once the clip plays, `false` if it failed to load, a newer music call replaced it, or it could not play. Failures are logged either way.
+
+```csharp
+if (!await sound.PlayMusic("Music/Boss"))
+    sound.PlayMusic(fallbackTheme);
+```
+
 Music calls take effect in the order you make them: a track or playlist that finishes loading after a newer `PlayMusic`, `PlayPlaylist` or `StopMusic` call is dropped, and the newer call cancels its loading.
 
 Music loaded by path is released by the manager once the track stops. Sound effects and voice take an optional `owner`, the object the loaded clip belongs to. It matters for the Addressables loader, which keeps a clip loaded until its owner is destroyed. Pass `this` from the object whose lifetime matches the sound, or leave it out to give the clip to the manager, which keeps it loaded while the manager lives (good for sounds you play all the time).
