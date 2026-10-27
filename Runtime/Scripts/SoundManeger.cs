@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -159,10 +158,7 @@ namespace Mane.Unity.SoundManeger
         private float _cachedSfxVolume = .8f;
 
         private readonly object _sfxTokenLock = new();
-        // Clips of playing SFX with the time they finish, so UnloadUnusedAssets() cannot unload them mid-play
-        private readonly ConcurrentDictionary<AudioClip, float> _playingSfx = new();
-        private readonly ConcurrentDictionary<AudioClip, ConcurrentQueue<float>> _limitedSfxTimings = new(1, 100);
-
+        private readonly SfxLimiter _sfxLimiter = new();
         private float _lastCleanupTime;
 
         private bool _isDestroyed;
@@ -879,11 +875,9 @@ namespace Mane.Unity.SoundManeger
         // True when the sound effect plays
         private bool TryPlaySfx(AudioClip clip, DuckType duck)
         {
-            if (_mixer == null || clip == null || _sfxSource == null || !IsSoundPlayingAvailable(clip))
+            if (_mixer == null || clip == null || _sfxSource == null ||
+                !_sfxLimiter.TryPlay(clip, Time.unscaledTime, _maxSameSoundsCount, _maxConcurrentSfx))
                 return false;
-
-            // Save link to SoundEffects asset to prevent unloading via UnloadUnusedAssets()
-            KeepAlive(clip);
 
             // Play sound based on duck type with null checks
             switch (duck)
@@ -1200,79 +1194,12 @@ namespace Mane.Unity.SoundManeger
             
             if (currentTime - _lastCleanupTime >= _sfxTimingsCleanupThreshold)
             {
-                CleanupSfxTimings();
-                CleanupActiveSfx();
+                _sfxLimiter.Cleanup(currentTime);
                 _lastCleanupTime = currentTime;
             }
 
             if (!_muteMusic && GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && _musicLoads == 0)
                 PlaylistTrackChange?.Invoke();
-        }
-        
-        private void KeepAlive(AudioClip clip)
-        {
-            if (!_playingSfx.ContainsKey(clip) && _playingSfx.Count >= _maxConcurrentSfx)
-            {
-                CleanupActiveSfx();
-
-                // Still full: the sound plays, but is not protected from unloading
-                if (_playingSfx.Count >= _maxConcurrentSfx)
-                    return;
-            }
-
-            _playingSfx[clip] = Time.unscaledTime + clip.length;
-        }
-
-        private bool IsSoundPlayingAvailable(AudioClip audioClip)
-        {
-            float currentTime = Time.unscaledTime;
-
-            // Try to get existing queue or create new one
-            ConcurrentQueue<float> times = _limitedSfxTimings.GetOrAdd(audioClip, _ => new ConcurrentQueue<float>());
-
-            // Cleanup old timings that are beyond the clip length
-            while (times.TryPeek(out float oldestTime) && currentTime - oldestTime >= audioClip.length)
-                times.TryDequeue(out _);
-
-            // If we have less sounds than maximum allowed (one is always allowed), add new timing
-            if (times.IsEmpty || times.Count < _maxSameSoundsCount)
-            {
-                times.Enqueue(currentTime);
-                return true;
-            }
-
-            // Every timing left is younger than the clip, so the limit is reached
-            return false;
-        }
-
-        private void CleanupSfxTimings()
-        {
-            float currentTime = Time.unscaledTime;
-
-            foreach (var kvp in _limitedSfxTimings)
-            {
-                var times = kvp.Value;
-
-                // Remove the timings of finished plays (all of them for a destroyed clip)
-                float length = kvp.Key ? kvp.Key.length : 0f;
-                while (times.TryPeek(out float oldestTime) && currentTime - oldestTime >= length)
-                    times.TryDequeue(out _);
-                
-                // Remove empty queues
-                if (times.IsEmpty)
-                    _limitedSfxTimings.TryRemove(kvp.Key, out _);
-            }
-        }
-
-        private void CleanupActiveSfx()
-        {
-            // Forget finished and destroyed clips
-            float currentTime = Time.unscaledTime;
-            foreach (var kvp in _playingSfx)
-            {
-                if (!kvp.Key || kvp.Value <= currentTime)
-                    _playingSfx.TryRemove(kvp.Key, out _);
-            }
         }
 
         /// <summary>
@@ -1285,8 +1212,7 @@ namespace Mane.Unity.SoundManeger
 
             _isDestroyed = true;
 
-            _playingSfx.Clear();
-            _limitedSfxTimings.Clear();
+            _sfxLimiter.Clear();
 
             // Disposing a token source does not cancel it, so pending loads are canceled first
             _sfxCancellationSource?.Cancel();
