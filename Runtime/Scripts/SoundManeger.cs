@@ -111,6 +111,8 @@ namespace Mane.Unity.SoundManeger
         private IClipLoader _clipLoader = new ResourcesClipLoader();
         // Own random source, so playlists do not change UnityEngine.Random or a seeded global random.
         private readonly IRandom _random = new ManeRandom();
+        // Music loads one at a time. All the manager's code runs on the main thread, so this orders async loads,
+        // it does not guard against other threads
         private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
         // Music loads in progress, the playlist waits for them before it changes the track
         private int _musicLoads;
@@ -142,7 +144,6 @@ namespace Mane.Unity.SoundManeger
         private float _cachedBgmVolume = .8f;
         private float _cachedSfxVolume = .8f;
 
-        private readonly object _sfxTokenLock = new();
         private readonly SfxLimiter _sfxLimiter = new();
         private float _lastCleanupTime;
 
@@ -938,7 +939,7 @@ namespace Mane.Unity.SoundManeger
                     CancellationToken musicToken = GetCancellationToken(true);
                     // The clip is released through the loader that loaded it, even if another one is set later
                     IClipLoader loader = _clipLoader;
-                    Interlocked.Increment(ref _musicLoads);
+                    _musicLoads++;
                     try
                     {
                         if (!await _musicLoadingSemaphore.WaitAsync(TimeSpan.FromSeconds(_loadingTimeout), musicToken))
@@ -989,17 +990,11 @@ namespace Mane.Unity.SoundManeger
                     }
                     finally
                     {
-                        Interlocked.Decrement(ref _musicLoads);
+                        _musicLoads--;
                     }
                 }
-                
-                // For SFX, we only need to protect token creation/disposal
-                CancellationToken token;
-                lock (_sfxTokenLock)
-                {
-                    token = GetCancellationToken(false);
-                }
 
+                CancellationToken token = GetCancellationToken(false);
                 if (owner == null)
                     owner = this;
 
@@ -1027,14 +1022,12 @@ namespace Mane.Unity.SoundManeger
         {
             if (!isMusic)
             {
-                // Note: This method is called within a lock for SFX
                 if (_sfxCancellationSource == null || _sfxCancellationSource.IsCancellationRequested)
                     CreateNewSfxCancellationSource();
-                
+
                 return _sfxCancellationSource.Token;
             }
-            
-            // Music token operations are protected by semaphore in GetClip
+
             if (_musicCancellationSource == null || _musicCancellationSource.IsCancellationRequested)
                 CreateNewMusicCancellationSource();
 
@@ -1098,7 +1091,6 @@ namespace Mane.Unity.SoundManeger
 
         private void CreateNewSfxCancellationSource()
         {
-            // Note: This method is called within a lock
             if (_sfxCancellationSource != null)
             {
                 _sfxCancellationSource.Cancel();
