@@ -1,8 +1,7 @@
-#if UNITY_ADDRESSABLES
 using UnityEngine;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-namespace Mane.Unity.SoundManeger
+namespace Mane.Unity.SoundManeger.Addressables
 {
     /// <summary>
     /// Handles <see cref="AddressablesMusicLink.ShouldReleaseHandler"/>.
@@ -41,4 +40,3 @@ namespace Mane.Unity.SoundManeger
         private void OnDestroy() => ShouldReleaseHandler?.Invoke(_handler);
     }
 }
-#endif

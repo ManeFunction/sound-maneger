@@ -1,13 +1,13 @@
-#if UNITY_ADDRESSABLES
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+// Inside this namespace, a bare Addressables means the namespace, not the class
+using AddressablesApi = UnityEngine.AddressableAssets.Addressables;
 
-namespace Mane.Unity.SoundManeger
+namespace Mane.Unity.SoundManeger.Addressables
 {
     /// <summary>
     /// <see cref="IMusicLoader"/> that loads clips by Addressables address. Available when the Addressables package is installed.
@@ -35,7 +35,7 @@ namespace Mane.Unity.SoundManeger
             if (hasOwner && !owner) return null;
 
             // Polled directly: a coroutine on the owner would stop with it, and this load would never finish
-            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(path);
+            AsyncOperationHandle<AudioClip> handle = AddressablesApi.LoadAssetAsync<AudioClip>(path);
             while (!handle.IsDone)
             {
                 if (token.IsCancellationRequested)
@@ -86,8 +86,7 @@ namespace Mane.Unity.SoundManeger
         private void OnShouldReleaseHandler(AsyncOperationHandle<AudioClip> handler)
         {
             if (handler.IsValid())
-                Addressables.Release(handler);
+                AddressablesApi.Release(handler);
         }
     }
 }
-#endif

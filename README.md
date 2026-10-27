@@ -95,10 +95,12 @@ By default, clips are loaded from `Resources` folders: a path is relative to a `
 To load clips with Addressables, install `com.unity.addressables` and switch the loader once, before you play anything by path:
 
 ```csharp
+using Mane.Unity.SoundManeger.Addressables;
+
 SoundManeger.Instance.SetMusicLoader(new AddressablesMusicLoader());
 ```
 
-Paths are then Addressables addresses. Music is released once it stops playing, and a sound effect or voice clip stays in memory until its owner (or the manager) is destroyed. A music track that fails to load is retried after `Music Retry Delay` seconds; sound effects and voice are not retried, because a sound that plays late is worse than none.
+The Addressables loader lives in its own assembly, `manefunction.sound-maneger.addressables`, which compiles only when the Addressables package is installed. If your code has an assembly definition, reference it there. Paths are then Addressables addresses. Music is released once it stops playing, and a sound effect or voice clip stays in memory until its owner (or the manager) is destroyed. A music track that fails to load is retried after `Music Retry Delay` seconds; sound effects and voice are not retried, because a sound that plays late is worse than none.
 
 For any other source, implement `IMusicLoader`: `GetMusicAsync(owner, path, token)` returns the clip (or null), `Release(clip)` frees a clip loaded without an owner, which is how the manager loads music (it does nothing by default), and `ShouldRetry` tells the manager whether failed music loads are worth retrying.
 
