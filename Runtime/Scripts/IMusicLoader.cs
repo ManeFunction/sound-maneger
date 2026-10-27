@@ -19,10 +19,19 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Loads the clip at <paramref name="path"/>. Called on the main thread.
         /// </summary>
-        /// <param name="owner">Object the loaded clip belongs to, for loaders that release clips with their owner. Never null.</param>
+        /// <param name="owner">Object the loaded clip belongs to, for loaders that release clips with their owner.
+        /// Null when the caller releases the clip with <see cref="Release"/>, as the manager does for music.
+        /// The manager always gives an owner for sound effects and voice.</param>
         /// <param name="path">Path or key of the clip.</param>
         /// <param name="token">Canceled when the clip is no longer needed.</param>
         /// <returns>The clip, or null if it could not be loaded or the load was canceled.</returns>
         Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default);
+
+        /// <summary>
+        /// Releases a clip that <see cref="GetMusicAsync"/> loaded without an owner, once per load. Called on the main thread.
+        /// Does nothing by default, for loaders whose clips need no release, like <see cref="ResourcesMusicLoader"/>.
+        /// </summary>
+        /// <param name="clip">Clip to release.</param>
+        void Release(AudioClip clip) { }
     }
 }

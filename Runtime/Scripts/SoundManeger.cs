@@ -142,8 +142,10 @@ namespace Mane.Unity.SoundManeger
 
         private List<string> _playlist;
         private int _playlistPointer;
-        private MonoBehaviour _playlistOwner;
         private AudioClip _nextPlaylistTrack;
+        // Music clips loaded by path, with the loader to release them with (a clip loaded twice is listed twice).
+        // One is released when a music source or the preloaded track lets it go, or when nothing takes it, see ReleaseMusic()
+        private readonly List<(AudioClip clip, IMusicLoader loader)> _loadedMusic = new();
         // Playlist tracks in a row that failed to load
         private int _failedPlaylistTracks;
         private volatile int _modeFlags;
@@ -471,6 +473,7 @@ namespace Mane.Unity.SoundManeger
         /// Sets the loader for every clip loaded by path (music, sound effects and voice).
         /// <see cref="ResourcesMusicLoader"/> is used by default; use <c>AddressablesMusicLoader</c>
         /// (available with the Addressables package) or your own <see cref="IMusicLoader"/>.
+        /// Music loaded before is still released through the loader that loaded it.
         /// </summary>
         /// <param name="musicLoader">Loader to use. Null is ignored.</param>
         public void SetMusicLoader(IMusicLoader musicLoader)
@@ -523,117 +526,55 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Loads and plays a single looped music track, like <see cref="PlayMusic(AudioClip)"/>.
         /// Cancels music that is still loading from earlier calls. If the track fails to load, the music stays as it was.
+        /// The clip is released through the loader once the track stops.
         /// </summary>
-        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> releases it when the owner is destroyed. If null, the manager is used.</param>
         /// <param name="path">Path of the track for the current <see cref="IMusicLoader"/>.</param>
-        public async void PlayMusic(MonoBehaviour owner, string path) =>
-            await LoadSingleTrack(StartMusicRequest(), owner, path);
+        public async void PlayMusic(string path) =>
+            await LoadSingleTrack(StartMusicRequest(), path);
 
         /// <summary>
-        /// Plays a playlist in the inspector's playing order, or a single looped track when <paramref name="playlist"/> is empty.
+        /// Plays a playlist, or a single looped track when it has one entry.
         /// Cancels music that is still loading from earlier calls. The next track is preloaded while the current one plays,
-        /// and a track that fails to load is skipped.
+        /// a track that fails to load is skipped, and every track is released through the loader once it stops.
         /// </summary>
-        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
-        /// <param name="firstTrackIsIntro">If true, <paramref name="first"/> plays once before the playlist.</param>
-        /// <param name="first">The intro, or else the first entry of the playlist (with Random or Shuffle order it can play at any position).</param>
-        /// <param name="playlist">The other tracks.</param>
-        public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string first, params string[] playlist)
-        {
-            if (string.IsNullOrEmpty(first)) return;
-
-            int request = StartMusicRequest();
-
-            // single track
-            if (playlist.IsNullOrEmpty())
-            {
-                await LoadSingleTrack(request, owner, first);
-
-                return;
-            }
-
-            // playlist
-            List<string> pl = new(playlist);
-            if (firstTrackIsIntro)
-            {
-                await StartPlaylistAfterIntro(request, owner, first, pl);
-
-                return;
-            }
-
-            pl.Insert(0, first);
-            StartPlaylist(owner, pl, false);
-        }
-
-        /// <summary>
-        /// Plays a playlist in the inspector's playing order, or a single looped track when it has one entry.
-        /// Cancels music that is still loading from earlier calls. The next track is preloaded while the current one plays,
-        /// and a track that fails to load is skipped.
-        /// </summary>
-        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
-        /// <param name="firstTrackIsIntro">If true, the first entry plays once before the others.</param>
-        /// <param name="playlist">Paths of the tracks. Null or empty does nothing.</param>
-        public async void PlayMusic(MonoBehaviour owner, bool firstTrackIsIntro, string[] playlist)
+        /// <param name="tracks">Paths of the tracks. Null or empty does nothing.</param>
+        /// <param name="firstTrackIsIntro">If true, the first entry plays once before the others.
+        /// Otherwise it is just the first entry (with Random or Shuffle order it can play at any position).</param>
+        /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>. It also becomes the default for later playlists.
+        /// If null, the current order is kept (the inspector's one, unless an earlier call changed it).</param>
+        public async void PlayPlaylist(IReadOnlyList<string> tracks, bool firstTrackIsIntro = false,
+            PlayingOrder? playingOrder = null)
         {
             // empty call
-            if (playlist.IsNullOrEmpty()) return;
+            if (tracks == null || tracks.Count == 0) return;
+
+            if (playingOrder.HasValue)
+                _playlistPlayingOrder = playingOrder.Value;
 
             int request = StartMusicRequest();
 
             // single track
-            if (playlist.Length == 1)
+            if (tracks.Count == 1)
             {
-                await LoadSingleTrack(request, owner, playlist[0]);
+                await LoadSingleTrack(request, tracks[0]);
 
                 return;
             }
 
             // playlist
-            List<string> pl = new(playlist);
+            List<string> pl = new(tracks);
             if (firstTrackIsIntro)
             {
                 string intro = pl[0];
                 pl.RemoveAt(0);
-                await StartPlaylistAfterIntro(request, owner, intro, pl);
+                await StartPlaylistAfterIntro(request, intro, pl);
 
                 return;
             }
 
-            StartPlaylist(owner, pl, false);
-        }
-        
-        /// <summary>
-        /// Plays a playlist in the given order, like <see cref="PlayMusic(MonoBehaviour, bool, string, string[])"/>.
-        /// The order also becomes the default for later playlists.
-        /// </summary>
-        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
-        /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>.</param>
-        /// <param name="firstTrackIsIntro">If true, <paramref name="first"/> plays once before the playlist.</param>
-        /// <param name="first">The intro, or else the first entry of the playlist (with Random or Shuffle order it can play at any position).</param>
-        /// <param name="playlist">The other tracks.</param>
-        public void PlayMusic(MonoBehaviour owner, PlayingOrder playingOrder,
-            bool firstTrackIsIntro, string first, params string[] playlist)
-        {
-            _playlistPlayingOrder = playingOrder;
-            
-            PlayMusic(owner, firstTrackIsIntro, first, playlist);
+            StartPlaylist(pl, false);
         }
 
-        /// <summary>
-        /// Plays a playlist in the given order, like <see cref="PlayMusic(MonoBehaviour, bool, string[])"/>.
-        /// The order also becomes the default for later playlists.
-        /// </summary>
-        /// <param name="owner">Owner of the loaded clips: <c>AddressablesMusicLoader</c> releases them when the owner is destroyed. If null, the manager is used.</param>
-        /// <param name="playingOrder">Order of the tracks, see <see cref="PlayingOrder"/>.</param>
-        /// <param name="firstTrackIsIntro">If true, the first entry plays once before the others.</param>
-        /// <param name="playlist">Paths of the tracks. Null or empty does nothing.</param>
-        public void PlayMusic(MonoBehaviour owner, PlayingOrder playingOrder, bool firstTrackIsIntro, string[] playlist)
-        {
-            _playlistPlayingOrder = playingOrder;
-            
-            PlayMusic(owner, firstTrackIsIntro, playlist);
-        }
-        
         /// <summary>
         /// Stops the music and the playlist at once (no fade-out), and cancels music that is still loading.
         /// </summary>
@@ -646,9 +587,9 @@ namespace Mane.Unity.SoundManeger
             _musicSource2.Stop();
             ClearPlaylist();
 
-            // Clear references to allow GC
-            _musicSource1.clip = null;
-            _musicSource2.clip = null;
+            // Release the loaded clips and clear the references to allow GC
+            SetMusicClip(_musicSource1, null);
+            SetMusicClip(_musicSource2, null);
         }
 
         // Every PlayMusic and StopMusic call starts a new request and cancels the music loads of the older ones.
@@ -679,38 +620,45 @@ namespace Mane.Unity.SoundManeger
             PlayMusicClip(clip);
         }
 
-        private async Task LoadSingleTrack(int request, MonoBehaviour owner, string path)
+        private async Task LoadSingleTrack(int request, string path)
         {
-            AudioClip clip = await GetClip(owner, path, true);
-            if (request == _musicRequest && clip != null)
+            AudioClip clip = await GetClip(path, true);
+            if (clip == null) return;
+
+            if (request == _musicRequest)
                 PlaySingleTrack(clip);
+            else
+                ReleaseMusic(clip);
         }
 
         // The intro plays once and the playlist starts after it. If the intro does not load, the playlist starts at once.
-        private async Task StartPlaylistAfterIntro(int request, MonoBehaviour owner, string intro, List<string> playlist)
+        private async Task StartPlaylistAfterIntro(int request, string intro, List<string> playlist)
         {
-            AudioClip clip = await GetClip(owner, intro, true);
+            AudioClip clip = await GetClip(intro, true);
             if (request != _musicRequest)
+            {
+                ReleaseMusic(clip);
                 return;
+            }
 
             if (clip != null)
                 PlaySingleTrack(clip);
 
-            StartPlaylist(owner, playlist, clip != null);
+            StartPlaylist(playlist, clip != null);
         }
 
 
-        private void StartPlaylist(MonoBehaviour owner, List<string> playlist, bool startAfterCurrentTrack)
+        private void StartPlaylist(List<string> playlist, bool startAfterCurrentTrack)
         {
             // Music is disabled without a mixer, see FillMixerStuff()
             if (_mixer == null) return;
 
+            // Drops the previous playlist with its preloaded track
+            ClearPlaylist();
+
             lock (_playlistLock)
             {
                 _playlist = new List<string>(playlist); // Create defensive copy
-                _playlistOwner = owner != null ? owner : this;
-                _nextPlaylistTrack = null;
-                _failedPlaylistTracks = 0;
 
                 _musicSource1.loop = false;
                 _musicSource2.loop = false;
@@ -823,7 +771,6 @@ namespace Mane.Unity.SoundManeger
         private async void CacheNextTrack()
         {
             int request = _musicRequest;
-            MonoBehaviour owner;
             string trackPath;
 
             // Get all needed data under lock
@@ -831,15 +778,22 @@ namespace Mane.Unity.SoundManeger
             {
                 if (_playlist == null || _playlist.Count == 0) return;
                 trackPath = _playlist[_playlistPointer];
-                owner = _playlistOwner;
             }
 
-            // Only proceed if we have valid data (GetClip() replaces a destroyed owner with the manager)
+            // Only proceed if we have valid data
             if (!string.IsNullOrEmpty(trackPath))
             {
-                AudioClip clip = await GetClip(owner, trackPath, true);
-                if (request == _musicRequest)
-                    _nextPlaylistTrack = clip;
+                AudioClip clip = await GetClip(trackPath, true);
+                if (request != _musicRequest)
+                {
+                    ReleaseMusic(clip);
+                    return;
+                }
+
+                // A track preloaded before is let go
+                AudioClip previous = _nextPlaylistTrack;
+                _nextPlaylistTrack = clip;
+                ReleaseMusic(previous);
             }
         }
 
@@ -847,26 +801,28 @@ namespace Mane.Unity.SoundManeger
         {
             if (_nextPlaylistTrack)
             {
-                _failedPlaylistTracks = 0;
-                PlayMusicClip(_nextPlaylistTrack);
+                AudioClip next = _nextPlaylistTrack;
                 _nextPlaylistTrack = null;
+                _failedPlaylistTracks = 0;
+                PlayMusicClip(next);
                 PrepareNextTrack();
                 return;
             }
 
             int request = _musicRequest;
-            MonoBehaviour owner;
             string trackPath;
             lock (_playlistLock)
             {
                 if (_playlist == null || _playlist.Count == 0) return;
-                owner = _playlistOwner;
                 trackPath = _playlist[_playlistPointer];
             }
 
-            var clip = await GetClip(owner, trackPath, true);
+            var clip = await GetClip(trackPath, true);
             if (request != _musicRequest)
+            {
+                ReleaseMusic(clip);
                 return;
+            }
 
             if (clip)
             {
@@ -882,14 +838,17 @@ namespace Mane.Unity.SoundManeger
 
         private void ClearPlaylist()
         {
+            AudioClip next;
             lock (_playlistLock)
             {
+                next = _nextPlaylistTrack;
                 _playlist = null;
-                _playlistOwner = null;
                 _nextPlaylistTrack = null;
                 _playlistPointer = 0;
                 _failedPlaylistTracks = 0;
             }
+
+            ReleaseMusic(next);
         }
 
 
@@ -933,11 +892,12 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Loads and plays a sound effect, like <see cref="PlaySfx(AudioClip, DuckType)"/>. A failed load is not retried.
         /// </summary>
-        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> releases it when the owner is destroyed. If null, the manager is used.</param>
         /// <param name="path">Path of the sound effect for the current <see cref="IMusicLoader"/>.</param>
         /// <param name="duck">What the sound effect ducks.</param>
-        public async void PlaySfx(MonoBehaviour owner, string path, DuckType duck = DuckType.None) => 
-            PlaySfx(await GetClip(owner, path, false), duck);
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> keeps it loaded until the owner is destroyed.
+        /// If null, the manager owns it, so it stays loaded while the manager lives.</param>
+        public async void PlaySfx(string path, DuckType duck = DuckType.None, MonoBehaviour owner = null) =>
+            PlaySfx(await GetClip(path, false, owner), duck);
 
         /// <summary>
         /// Stops all sound effects, and the voice too, because it plays on the music-ducking source.
@@ -974,9 +934,11 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Loads and plays a voice line, like <see cref="PlayVoice(AudioClip, float)"/>. A failed load is not retried.
         /// </summary>
-        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> releases it when the owner is destroyed. If null, the manager is used.</param>
         /// <param name="path">Path of the voice clip for the current <see cref="IMusicLoader"/>.</param>
-        public async void PlayVoice(MonoBehaviour owner, string path) => PlayVoice(await GetClip(owner, path, false));
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> keeps it loaded until the owner is destroyed.
+        /// If null, the manager owns it, so it stays loaded while the manager lives.</param>
+        public async void PlayVoice(string path, MonoBehaviour owner = null) =>
+            PlayVoice(await GetClip(path, false, owner));
         
         /// <summary>
         /// Stops the voice, and the sound effects played with <see cref="DuckType.MusicOnly"/> too, because they share its source.
@@ -988,20 +950,25 @@ namespace Mane.Unity.SoundManeger
         }
 
         
+        // Takes over a loaded clip: it is released when its source lets it go, or at once when it does not play
         private void PlayMusicClip(AudioClip clip)
         {
-            if (_mixer == null || clip == null) return;
+            if (clip == null) return;
 
-            // The clip already plays on the active source: keep it playing
-            if (_musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
+            // No music without a mixer, or the clip already plays on the active source: keep it playing
+            if (_mixer == null ||
+                _musicSource2.clip == clip && _musicSource2.isPlaying && !_activeFirstMusicSource ||
                 _musicSource1.clip == clip && _musicSource1.isPlaying && _activeFirstMusicSource)
+            {
+                ReleaseMusic(clip);
                 return;
+            }
 
             try
             {
                 if (_activeFirstMusicSource)
                 {
-                    _musicSource2.clip = clip;
+                    SetMusicClip(_musicSource2, clip);
                     if (!GetMode().HasFlag(PlayMode.PlaylistActive))
                         _musicSource2.loop = true;
                     _musicSource2.Play();
@@ -1012,7 +979,7 @@ namespace Mane.Unity.SoundManeger
                 }
                 else
                 {
-                    _musicSource1.clip = clip;
+                    SetMusicClip(_musicSource1, clip);
                     if (!GetMode().HasFlag(PlayMode.PlaylistActive))
                         _musicSource1.loop = true;
                     _musicSource1.Play();
@@ -1034,12 +1001,38 @@ namespace Mane.Unity.SoundManeger
         private IEnumerator StopMusicSource(AudioSource source, float delay)
         {
             yield return new WaitForSecondsRealtime(delay);
-            
+
             source.Stop();
+            // The faded out track is no longer needed
+            SetMusicClip(source, null);
             _transitionAwaiter = null;
         }
-        
-        private async Task<AudioClip> GetClip(MonoBehaviour owner, string path, bool isMusic)
+
+        // Puts a clip on a music source and releases the loaded clip it replaces
+        private void SetMusicClip(AudioSource source, AudioClip clip)
+        {
+            AudioClip previous = source.clip;
+            source.clip = clip;
+            ReleaseMusic(previous);
+        }
+
+        // Gives a music clip loaded by path back to its loader. A clip passed directly is not listed, so it is left alone.
+        // References are compared, so a destroyed clip is still found (Unity's == would match any destroyed clip)
+        private void ReleaseMusic(AudioClip clip)
+        {
+            if (clip is null) return;
+
+            int index = _loadedMusic.FindIndex(loaded => ReferenceEquals(loaded.clip, clip));
+            if (index < 0) return;
+
+            IMusicLoader loader = _loadedMusic[index].loader;
+            _loadedMusic.RemoveAt(index);
+            loader.Release(clip);
+        }
+
+        // Music loads without an owner and is listed for ReleaseMusic(). Sound effects and voice belong to the owner,
+        // or to the manager when there is none.
+        private async Task<AudioClip> GetClip(string path, bool isMusic, MonoBehaviour owner = null)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -1053,15 +1046,14 @@ namespace Mane.Unity.SoundManeger
                 return null;
             }
 
-            if (owner == null)
-                owner = this;
-
             try
             {
                 if (isMusic)
                 {
                     // Taken once, so a newer music request cancels the waiting and the retries of this load too
                     CancellationToken musicToken = GetCancellationToken(true);
+                    // The clip is released through the loader that loaded it, even if another one is set later
+                    IMusicLoader loader = _musicLoader;
                     Interlocked.Increment(ref _musicLoads);
                     try
                     {
@@ -1074,11 +1066,11 @@ namespace Mane.Unity.SoundManeger
                         try
                         {
                             AudioClip clip = null;
-                            bool shouldRetry = _musicLoader.ShouldRetry;
+                            bool shouldRetry = loader.ShouldRetry;
 
                             do
                             {
-                                clip = await _musicLoader.GetMusicAsync(owner, path, musicToken);
+                                clip = await loader.GetMusicAsync(null, path, musicToken);
 
                                 if (clip != null || !shouldRetry || musicToken.IsCancellationRequested)
                                     break;
@@ -1088,9 +1080,22 @@ namespace Mane.Unity.SoundManeger
 
                             } while (!_isDisposed);
 
-                            if (clip == null && !musicToken.IsCancellationRequested)
-                                Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
+                            if (clip == null)
+                            {
+                                if (!musicToken.IsCancellationRequested)
+                                    Debug.LogError($"[SoundManeger] Failed to load music clip at path: {path}");
 
+                                return null;
+                            }
+
+                            // Dispose() has released the other clips already
+                            if (_isDisposed)
+                            {
+                                loader.Release(clip);
+                                return null;
+                            }
+
+                            _loadedMusic.Add((clip, loader));
                             return clip;
                         }
                         finally
@@ -1110,7 +1115,10 @@ namespace Mane.Unity.SoundManeger
                 {
                     token = GetCancellationToken(false);
                 }
-                
+
+                if (owner == null)
+                    owner = this;
+
                 // No retries: a sound effect or voice line played seconds late is worse than none
                 AudioClip sfxClip = await _musicLoader.GetMusicAsync(owner, path, token);
 
@@ -1240,8 +1248,8 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Cancels pending loads, stops the playlist and forgets the sound effects bookkeeping. Called on destroy.
-        /// After it, the manager no longer loads clips by path.
+        /// Cancels pending loads, stops the playlist, releases the music loaded by path (even the track that is playing)
+        /// and forgets the sound effects bookkeeping. Called on destroy. After it, the manager no longer loads clips by path.
         /// </summary>
         public void Dispose()
         {
@@ -1262,6 +1270,11 @@ namespace Mane.Unity.SoundManeger
             SetMode(PlayMode.Silence);
             PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
+
+            // The music sources are not touched: on destroy they can be gone already
+            foreach ((AudioClip clip, IMusicLoader loader) in _loadedMusic)
+                loader.Release(clip);
+            _loadedMusic.Clear();
         }
 
         private void CreateNewMusicCancellationSource()

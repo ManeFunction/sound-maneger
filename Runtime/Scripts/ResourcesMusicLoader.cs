@@ -6,7 +6,8 @@ namespace Mane.Unity.SoundManeger
 {
     /// <summary>
     /// Default <see cref="IMusicLoader"/>: loads clips from <c>Resources</c> folders with <see cref="Resources.LoadAsync{T}(string)"/>.
-    /// Paths are relative to a <c>Resources</c> folder, without the file extension. The owner is not used.
+    /// Paths are relative to a <c>Resources</c> folder, without the file extension. The owner is not used, and clips
+    /// need no release: <see cref="Resources.UnloadUnusedAssets"/> frees them once nothing uses them.
     /// </summary>
     public class ResourcesMusicLoader : IMusicLoader
     {

@@ -60,17 +60,17 @@ SoundManeger sound = SoundManeger.Instance;
 
 // Music
 sound.PlayMusic(menuTheme);                       // a looped track, crossfaded from the current one
-sound.PlayMusic(this, "Music/Menu");              // loaded by path, then played the same way
-sound.PlayMusic(this, true, "Music/Intro",        // the intro plays once,
-    "Music/Level1", "Music/Level2");              // then the playlist
-sound.PlayMusic(this, SoundManeger.PlayingOrder.Shuffle, false,
-    new[] { "Music/A", "Music/B", "Music/C" });   // a shuffled playlist
+sound.PlayMusic("Music/Menu");                    // loaded by path, then played the same way
+sound.PlayPlaylist(new[] { "Music/Intro",         // the intro plays once,
+    "Music/Level1", "Music/Level2" }, true);      // then the playlist
+sound.PlayPlaylist(new[] { "Music/A", "Music/B", "Music/C" },
+    playingOrder: SoundManeger.PlayingOrder.Shuffle);   // a shuffled playlist
 sound.StopMusic();
 
 // Sound effects and voice
 sound.PlaySfx(clickClip);
-sound.PlaySfx(this, "Sfx/Explosion", SoundManeger.DuckType.MusicOnly);
-sound.PlayVoice(this, "Voice/Hello");
+sound.PlaySfx("Sfx/Explosion", SoundManeger.DuckType.MusicOnly);
+sound.PlayVoice("Voice/Hello", this);             // the clip belongs to this object
 
 // Mixing
 sound.Lowpass(true);
@@ -82,9 +82,9 @@ sound.AudioPaused = true;                         // AudioListener.pause
 sound.ContinueAudioOnPause = false;               // the manager pauses too
 ```
 
-Music calls take effect in the order you make them: a track or playlist that finishes loading after a newer `PlayMusic` or `StopMusic` call is dropped, and the newer call cancels its loading.
+Music calls take effect in the order you make them: a track or playlist that finishes loading after a newer `PlayMusic`, `PlayPlaylist` or `StopMusic` call is dropped, and the newer call cancels its loading.
 
-The `owner` parameter is the object the loaded clips belong to. It matters for the Addressables loader, which releases clips when their owner is destroyed. Pass `this` from the object whose lifetime matches the music, or null to use the manager itself.
+Music loaded by path is released by the manager once the track stops. Sound effects and voice take an optional `owner`, the object the loaded clip belongs to. It matters for the Addressables loader, which keeps a clip loaded until its owner is destroyed. Pass `this` from the object whose lifetime matches the sound, or leave it out to give the clip to the manager, which keeps it loaded while the manager lives (good for sounds you play all the time).
 
 `PlaylistTrackChange` is raised every time a playlist track ends and the next one starts.
 
@@ -98,9 +98,9 @@ To load clips with Addressables, install `com.unity.addressables` and switch the
 SoundManeger.Instance.SetMusicLoader(new AddressablesMusicLoader());
 ```
 
-Paths are then Addressables addresses. Every clip loaded for an owner stays in memory until that owner is destroyed. A music track that fails to load is retried after `Music Retry Delay` seconds; sound effects and voice are not retried, because a sound that plays late is worse than none.
+Paths are then Addressables addresses. Music is released once it stops playing, and a sound effect or voice clip stays in memory until its owner (or the manager) is destroyed. A music track that fails to load is retried after `Music Retry Delay` seconds; sound effects and voice are not retried, because a sound that plays late is worse than none.
 
-For any other source, implement `IMusicLoader`: `GetMusicAsync(owner, path, token)` returns the clip (or null), and `ShouldRetry` tells the manager whether failed music loads are worth retrying.
+For any other source, implement `IMusicLoader`: `GetMusicAsync(owner, path, token)` returns the clip (or null), `Release(clip)` frees a clip loaded without an owner, which is how the manager loads music (it does nothing by default), and `ShouldRetry` tells the manager whether failed music loads are worth retrying.
 
 ### Your own mixer
 
