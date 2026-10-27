@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [2.0.0-preview.1] - 2026-10-22
+## [2.0.0-preview.1] - 2026-10-27
 Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git) replace the legacy `ManeUtils` dependency. Versioning jumps to 2.0.0 to match the rest of my packages (see my [GitHub](https://github.com/ManeFunction) for more useful Unity tools).
 
 ### Added
