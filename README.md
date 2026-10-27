@@ -100,9 +100,9 @@ using Mane.Unity.SoundManeger.Addressables;
 SoundManeger.Instance.SetClipLoader(new AddressablesClipLoader());
 ```
 
-The Addressables loader lives in its own assembly, `manefunction.sound-maneger.addressables`, which compiles only when the Addressables package is installed. If your code has an assembly definition, reference it there. Paths are then Addressables addresses. Music is released once it stops playing, and a sound effect or voice clip stays in memory until its owner (or the manager) is destroyed. A music track that fails to load is retried after `Music Retry Delay` seconds; sound effects and voice are not retried, because a sound that plays late is worse than none.
+The Addressables loader lives in its own assembly, `manefunction.sound-maneger.addressables`, which compiles only when the Addressables package is installed. If your code has an assembly definition, reference it there. Paths are then Addressables addresses. Music is released once it stops playing, and a sound effect or voice clip stays in memory until its owner (or the manager) is destroyed. A music track that fails to load is retried after 5 seconds; pass another delay to the constructor, like `new AddressablesClipLoader(2f)`, or 0 to turn retries off. Sound effects and voice are not retried, because a sound that plays late is worse than none.
 
-For any other source, implement `IClipLoader`: `LoadClipAsync(owner, path, token)` returns the clip (or null), `Release(clip)` frees a clip loaded without an owner, which is how the manager loads music (it does nothing by default), and `ShouldRetry` tells the manager whether failed music loads are worth retrying.
+For any other source, implement `IClipLoader`: `LoadClipAsync(owner, path, token)` returns the clip (or null), `Release(clip)` frees a clip loaded without an owner, which is how the manager loads music (it does nothing by default), and `RetryDelay` tells the manager how many seconds to wait before it retries a failed music load (0 by default, which means no retries).
 
 ### Your own mixer
 

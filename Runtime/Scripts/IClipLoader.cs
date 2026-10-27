@@ -11,10 +11,10 @@ namespace Mane.Unity.SoundManeger
     public interface IClipLoader
     {
         /// <summary>
-        /// Indicates whether the loader should retry loading if it fails.
-        /// Only music is retried, after the manager's retry delay.
+        /// Delay in seconds before the manager retries a music load that failed. Zero or less (the default) means
+        /// a failed load is not retried. Sound effects and voice are never retried.
         /// </summary>
-        bool ShouldRetry { get; }
+        float RetryDelay => 0f;
 
         /// <summary>
         /// Loads the clip at <paramref name="path"/>. Called on the main thread.

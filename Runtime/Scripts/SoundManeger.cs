@@ -110,8 +110,6 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private int _maxConcurrentSfx = 100;
         [Tooltip("How long, in seconds, a music load waits for the one before it.")]
         [SerializeField] private float _loadingTimeout = 30f;
-        [Tooltip("Delay in seconds before retrying music loading if it failed. Only applies to loaders that support retrying.")]
-        [SerializeField] private float _musicRetryDelay = 5f;
 
         
         private AudioMixerSnapshot _music1Snapshot;
@@ -1066,17 +1064,17 @@ namespace Mane.Unity.SoundManeger
                         try
                         {
                             AudioClip clip = null;
-                            bool shouldRetry = loader.ShouldRetry;
+                            float retryDelay = loader.RetryDelay;
 
                             do
                             {
                                 clip = await loader.LoadClipAsync(null, path, musicToken);
 
-                                if (clip != null || !shouldRetry || musicToken.IsCancellationRequested)
+                                if (clip != null || retryDelay <= 0f || musicToken.IsCancellationRequested)
                                     break;
 
-                                Debug.LogWarning($"[SoundManeger] Failed to load music, retrying after {_musicRetryDelay} seconds: {path}");
-                                await Task.Delay(TimeSpan.FromSeconds(_musicRetryDelay), musicToken);
+                                Debug.LogWarning($"[SoundManeger] Failed to load music, retrying after {retryDelay} seconds: {path}");
+                                await Task.Delay(TimeSpan.FromSeconds(retryDelay), musicToken);
 
                             } while (!_isDestroyed);
 

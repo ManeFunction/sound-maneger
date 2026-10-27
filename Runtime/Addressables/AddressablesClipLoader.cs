@@ -21,9 +21,16 @@ namespace Mane.Unity.SoundManeger.Addressables
         private readonly List<AsyncOperationHandle<AudioClip>> _ownerlessHandles = new();
 
         /// <summary>
-        /// Addressables loader should retry as asset loading can fail temporarily
+        /// Creates the loader.
         /// </summary>
-        public bool ShouldRetry => true;
+        /// <param name="retryDelay">Delay in seconds before a failed music load is retried, see <see cref="RetryDelay"/>.</param>
+        public AddressablesClipLoader(float retryDelay = 5f) => RetryDelay = retryDelay;
+
+        /// <summary>
+        /// Delay in seconds before the manager retries a music load that failed, because an Addressables load
+        /// can fail temporarily (for example, a remote bundle download). Zero or less turns retries off.
+        /// </summary>
+        public float RetryDelay { get; }
 
         /// <inheritdoc />
         public async Task<AudioClip> LoadClipAsync(MonoBehaviour owner, string path, CancellationToken token = default)

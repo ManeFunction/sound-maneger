@@ -12,9 +12,9 @@ namespace Mane.Unity.SoundManeger
     public class ResourcesClipLoader : IClipLoader
     {
         /// <summary>
-        /// Resources loader doesn't need to retry as failures are permanent
+        /// Always 0: a <c>Resources</c> load that fails will fail again, so it is not retried.
         /// </summary>
-        public bool ShouldRetry => false;
+        public float RetryDelay => 0f;
 
         /// <inheritdoc />
         public async Task<AudioClip> LoadClipAsync(MonoBehaviour owner, string path, CancellationToken token = default)
