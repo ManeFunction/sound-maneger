@@ -43,7 +43,7 @@ On Windows, I recommend `Git Bash` (`MINGW`) for CLI work: it is a Unix-like she
 
 ## Usage
 
-Drag the `SoundManeger` prefab from `Packages/Sound Maneger/Runtime` into your first scene, and you are good. It survives scene loads, and a copy in a scene that is loaded later destroys itself. Keep it a root object: Unity can only keep root objects between scenes.
+Drag the `SoundManeger` prefab from `Packages/Sound Maneger/Runtime/Resources` into your first scene, and you are good. It survives scene loads, and a copy in a scene that is loaded later destroys itself. Keep it a root object: Unity can only keep root objects between scenes.
 
 Or use `GameObject -> Add SoundManeger` (also in the Hierarchy context menu). It adds the prefab as a root object to the scene of the selected object, or to the active scene when nothing is selected.
 
