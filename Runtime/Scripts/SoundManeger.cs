@@ -70,15 +70,6 @@ namespace Mane.Unity.SoundManeger
         // The package mixer, in the package's Resources folder
         private const string DefaultMixerPath = "SoundManeger/AudioMixer";
 
-        [Flags]
-        private enum PlayMode : byte
-        {
-            Silence = 0,
-            PlayingMusic = 1,
-            PlaylistActive = 2,
-            NeedMusicSwitch = PlayingMusic | PlaylistActive
-        }
-        
 
         [SerializeField] private AudioMixer _mixer;
         [SerializeField] private AudioListener _listener;
@@ -142,7 +133,6 @@ namespace Mane.Unity.SoundManeger
         // Music clips loaded by path, with the loader to release them with (a clip loaded twice is listed twice).
         // One is released when a music source or the preloaded track lets it go, or when nothing takes it, see ReleaseMusic()
         private readonly List<(AudioClip clip, IClipLoader loader)> _loadedMusic = new();
-        private volatile int _modeFlags;
 
         private bool _activeFirstMusicSource;
         private bool _lowpass;
@@ -574,7 +564,6 @@ namespace Mane.Unity.SoundManeger
         public void StopMusic()
         {
             StartMusicRequest();
-            SetMode(PlayMode.Silence);
             PlaylistTrackChange -= OnTrackChange;
             _musicSource1.Stop();
             _musicSource2.Stop();
@@ -606,7 +595,6 @@ namespace Mane.Unity.SoundManeger
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
-            RemoveMode(PlayMode.PlaylistActive);
             PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
 
@@ -650,11 +638,10 @@ namespace Mane.Unity.SoundManeger
 
             // Drops the previous playlist with its preloaded track
             ClearPlaylist();
+            // Update() moves on from here, even if the first track fails to load
             _playlist = new Playlist(tracks, order, _random);
             _musicSource1.loop = false;
             _musicSource2.loop = false;
-            // Music is on from here, so Update() moves on even if the first track fails to load
-            AddMode(PlayMode.NeedMusicSwitch);
 
             // safe way to exclude double subscription
             PlaylistTrackChange -= OnTrackChange;
@@ -717,7 +704,6 @@ namespace Mane.Unity.SoundManeger
                     if (!playlist.SkipFailedTrack())
                     {
                         Debug.LogError("[SoundManeger] None of the playlist tracks could be loaded, the playlist is stopped.");
-                        RemoveMode(PlayMode.PlaylistActive);
                         PlaylistTrackChange -= OnTrackChange;
                         ClearPlaylist();
                     }
@@ -872,13 +858,12 @@ namespace Mane.Unity.SoundManeger
                 return true;
             }
 
+            // The sources loop already, or not for a playlist, see PlaySingleTrack() and StartPlaylist()
             try
             {
                 if (_activeFirstMusicSource)
                 {
                     SetMusicClip(_musicSource2, clip);
-                    if (!GetMode().HasFlag(PlayMode.PlaylistActive))
-                        _musicSource2.loop = true;
                     _musicSource2.Play();
                     GetMusicSnapshot(false).TransitionTo(_transitionTime);
                     _activeFirstMusicSource = false;
@@ -888,8 +873,6 @@ namespace Mane.Unity.SoundManeger
                 else
                 {
                     SetMusicClip(_musicSource1, clip);
-                    if (!GetMode().HasFlag(PlayMode.PlaylistActive))
-                        _musicSource1.loop = true;
                     _musicSource1.Play();
                     GetMusicSnapshot(true).TransitionTo(_transitionTime);
                     _activeFirstMusicSource = true;
@@ -903,7 +886,6 @@ namespace Mane.Unity.SoundManeger
                 return false;
             }
 
-            AddMode(PlayMode.PlayingMusic);
             return true;
         }
 
@@ -1076,7 +1058,8 @@ namespace Mane.Unity.SoundManeger
                 _lastCleanupTime = currentTime;
             }
 
-            if (!_muteMusic && GetMode() == PlayMode.NeedMusicSwitch && !IsMusicPlaying && _musicLoads == 0)
+            // The playlist track has ended. Tracks do not change while the music is muted, or while music loads
+            if (_playlist != null && !_muteMusic && !IsMusicPlaying && _musicLoads == 0)
                 PlaylistTrackChange?.Invoke();
         }
 
@@ -1099,7 +1082,6 @@ namespace Mane.Unity.SoundManeger
             CancelMusicLoading();
             // The semaphore is not disposed: canceled loads still release it when they finish
 
-            SetMode(PlayMode.Silence);
             PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
 
@@ -1128,28 +1110,6 @@ namespace Mane.Unity.SoundManeger
                 _sfxCancellationSource.Dispose();
             }
             _sfxCancellationSource = new UnityCancellationTokenSource();
-        }
-
-        private PlayMode GetMode()
-        {
-            return (PlayMode)Interlocked.CompareExchange(ref _modeFlags, 0, 0);
-        }
-
-        private void SetMode(PlayMode value)
-        {
-            Interlocked.Exchange(ref _modeFlags, (int)value);
-        }
-
-        private void AddMode(PlayMode flag)
-        {
-            var current = Interlocked.CompareExchange(ref _modeFlags, 0, 0);
-            Interlocked.Exchange(ref _modeFlags, current | (int)flag);
-        }
-
-        private void RemoveMode(PlayMode flag)
-        {
-            var current = Interlocked.CompareExchange(ref _modeFlags, 0, 0);
-            Interlocked.Exchange(ref _modeFlags, current & ~(int)flag);
         }
     }
 }
