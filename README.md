@@ -13,7 +13,7 @@ The package is supported starting from **Unity 6.0.81** (6000.0.81f1) and depend
 - Lowpass filter for the music (pause menus, underwater, muffled scenes).
 - Master, music, and SFX volume in the `0..1` range, and separate mute for music and SFX.
 - Pause support: the manager's audio can keep playing while `AudioListener.pause` is set, or pause with the rest of the game.
-- Async loading by path through `IMusicLoader`: from `Resources` by default, from `Addressables` when the package is installed, or with your own loader. Failed music loads can be retried after a delay, and a newer call cancels the loads it makes useless.
+- Async loading by path through `IClipLoader`: from `Resources` by default, from `Addressables` when the package is installed, or with your own loader. Failed music loads can be retried after a delay, and a newer call cancels the loads it makes useless.
 - A ready-to-use prefab and mixer, a `ManeStyle` inspector, and a singleton that sets itself up when there is no prefab in the scene.
 
 ## Inspector
@@ -97,12 +97,12 @@ To load clips with Addressables, install `com.unity.addressables` and switch the
 ```csharp
 using Mane.Unity.SoundManeger.Addressables;
 
-SoundManeger.Instance.SetMusicLoader(new AddressablesMusicLoader());
+SoundManeger.Instance.SetClipLoader(new AddressablesClipLoader());
 ```
 
 The Addressables loader lives in its own assembly, `manefunction.sound-maneger.addressables`, which compiles only when the Addressables package is installed. If your code has an assembly definition, reference it there. Paths are then Addressables addresses. Music is released once it stops playing, and a sound effect or voice clip stays in memory until its owner (or the manager) is destroyed. A music track that fails to load is retried after `Music Retry Delay` seconds; sound effects and voice are not retried, because a sound that plays late is worse than none.
 
-For any other source, implement `IMusicLoader`: `GetMusicAsync(owner, path, token)` returns the clip (or null), `Release(clip)` frees a clip loaded without an owner, which is how the manager loads music (it does nothing by default), and `ShouldRetry` tells the manager whether failed music loads are worth retrying.
+For any other source, implement `IClipLoader`: `LoadClipAsync(owner, path, token)` returns the clip (or null), `Release(clip)` frees a clip loaded without an owner, which is how the manager loads music (it does nothing by default), and `ShouldRetry` tells the manager whether failed music loads are worth retrying.
 
 ### Your own mixer
 

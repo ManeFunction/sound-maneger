@@ -5,11 +5,11 @@ using UnityEngine;
 namespace Mane.Unity.SoundManeger
 {
     /// <summary>
-    /// Default <see cref="IMusicLoader"/>: loads clips from <c>Resources</c> folders with <see cref="Resources.LoadAsync{T}(string)"/>.
+    /// Default <see cref="IClipLoader"/>: loads clips from <c>Resources</c> folders with <see cref="Resources.LoadAsync{T}(string)"/>.
     /// Paths are relative to a <c>Resources</c> folder, without the file extension. The owner is not used, and clips
     /// need no release: <see cref="Resources.UnloadUnusedAssets"/> frees them once nothing uses them.
     /// </summary>
-    public class ResourcesMusicLoader : IMusicLoader
+    public class ResourcesClipLoader : IClipLoader
     {
         /// <summary>
         /// Resources loader doesn't need to retry as failures are permanent
@@ -17,7 +17,7 @@ namespace Mane.Unity.SoundManeger
         public bool ShouldRetry => false;
 
         /// <inheritdoc />
-        public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
+        public async Task<AudioClip> LoadClipAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path)) return null;
 

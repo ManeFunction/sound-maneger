@@ -10,12 +10,12 @@ using AddressablesApi = UnityEngine.AddressableAssets.Addressables;
 namespace Mane.Unity.SoundManeger.Addressables
 {
     /// <summary>
-    /// <see cref="IMusicLoader"/> that loads clips by Addressables address. Available when the Addressables package is installed.
+    /// <see cref="IClipLoader"/> that loads clips by Addressables address. Available when the Addressables package is installed.
     /// A clip loaded for an owner is held by an <see cref="AddressablesMusicLink"/> on the owner's GameObject and released
     /// when the owner is destroyed, so every clip loaded for an owner stays in memory until then.
     /// A clip loaded without an owner (music) is held until <see cref="Release"/>.
     /// </summary>
-    public class AddressablesMusicLoader : IMusicLoader
+    public class AddressablesClipLoader : IClipLoader
     {
         // Handles of the clips loaded without an owner, one per load
         private readonly List<AsyncOperationHandle<AudioClip>> _ownerlessHandles = new();
@@ -26,7 +26,7 @@ namespace Mane.Unity.SoundManeger.Addressables
         public bool ShouldRetry => true;
 
         /// <inheritdoc />
-        public async Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default)
+        public async Task<AudioClip> LoadClipAsync(MonoBehaviour owner, string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path)) return null;
 

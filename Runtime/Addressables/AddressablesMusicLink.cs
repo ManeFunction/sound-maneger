@@ -11,7 +11,7 @@ namespace Mane.Unity.SoundManeger.Addressables
 
     /// <summary>
     /// Holds the Addressables handle of one loaded clip for its GameObject, and asks for its release
-    /// when another handle is bound or the GameObject is destroyed. <see cref="AddressablesMusicLoader"/> adds it to the owner.
+    /// when another handle is bound or the GameObject is destroyed. <see cref="AddressablesClipLoader"/> adds it to the owner.
     /// </summary>
     public class AddressablesMusicLink : MonoBehaviour
     {

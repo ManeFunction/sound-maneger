@@ -15,7 +15,7 @@ namespace Mane.Unity.SoundManeger
     /// Audio manager singleton. Music plays on two sources crossfaded by <see cref="AudioMixer"/> snapshots,
     /// as a single looped track or a playlist. Sound effects can duck the music or all other sounds,
     /// with a limit of simultaneous copies of the same clip. Clips are passed directly or loaded by path
-    /// through an <see cref="IMusicLoader"/> (<see cref="ResourcesMusicLoader"/> by default).
+    /// through an <see cref="IClipLoader"/> (<see cref="ResourcesClipLoader"/> by default).
     /// Put the package prefab into your first scene, or let <see cref="UnitySingleton{T}.Instance"/>
     /// create a manager with default sources.
     /// </summary>
@@ -119,8 +119,8 @@ namespace Mane.Unity.SoundManeger
         private AudioMixerSnapshot _music1LowSnapshot;
         private AudioMixerSnapshot _music2LowSnapshot;
 
-        // Set here, not in Awake(), so a SetMusicLoader() call made before Awake() is kept
-        private IMusicLoader _musicLoader = new ResourcesMusicLoader();
+        // Set here, not in Awake(), so a SetClipLoader() call made before Awake() is kept
+        private IClipLoader _clipLoader = new ResourcesClipLoader();
         // Own random source, so playlists do not change UnityEngine.Random or a seeded global random.
         private readonly IRandom _random = new ManeRandom();
         private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
@@ -145,7 +145,7 @@ namespace Mane.Unity.SoundManeger
         private AudioClip _nextPlaylistTrack;
         // Music clips loaded by path, with the loader to release them with (a clip loaded twice is listed twice).
         // One is released when a music source or the preloaded track lets it go, or when nothing takes it, see ReleaseMusic()
-        private readonly List<(AudioClip clip, IMusicLoader loader)> _loadedMusic = new();
+        private readonly List<(AudioClip clip, IClipLoader loader)> _loadedMusic = new();
         // Playlist tracks in a row that failed to load
         private int _failedPlaylistTracks;
         private volatile int _modeFlags;
@@ -471,16 +471,16 @@ namespace Mane.Unity.SoundManeger
         
         /// <summary>
         /// Sets the loader for every clip loaded by path (music, sound effects and voice).
-        /// <see cref="ResourcesMusicLoader"/> is used by default; use <c>AddressablesMusicLoader</c>
-        /// (available with the Addressables package) or your own <see cref="IMusicLoader"/>.
+        /// <see cref="ResourcesClipLoader"/> is used by default; use <c>AddressablesClipLoader</c>
+        /// (available with the Addressables package) or your own <see cref="IClipLoader"/>.
         /// Music loaded before is still released through the loader that loaded it.
         /// </summary>
-        /// <param name="musicLoader">Loader to use. Null is ignored.</param>
-        public void SetMusicLoader(IMusicLoader musicLoader)
+        /// <param name="clipLoader">Loader to use. Null is ignored.</param>
+        public void SetClipLoader(IClipLoader clipLoader)
         {
-            if (musicLoader == null) return;
-            
-            _musicLoader = musicLoader;
+            if (clipLoader == null) return;
+
+            _clipLoader = clipLoader;
         }
 
 
@@ -528,7 +528,7 @@ namespace Mane.Unity.SoundManeger
         /// Cancels music that is still loading from earlier calls. If the track fails to load, the music stays as it was.
         /// The clip is released through the loader once the track stops.
         /// </summary>
-        /// <param name="path">Path of the track for the current <see cref="IMusicLoader"/>.</param>
+        /// <param name="path">Path of the track for the current <see cref="IClipLoader"/>.</param>
         public async void PlayMusic(string path) =>
             await LoadSingleTrack(StartMusicRequest(), path);
 
@@ -892,9 +892,9 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Loads and plays a sound effect, like <see cref="PlaySfx(AudioClip, DuckType)"/>. A failed load is not retried.
         /// </summary>
-        /// <param name="path">Path of the sound effect for the current <see cref="IMusicLoader"/>.</param>
+        /// <param name="path">Path of the sound effect for the current <see cref="IClipLoader"/>.</param>
         /// <param name="duck">What the sound effect ducks.</param>
-        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> keeps it loaded until the owner is destroyed.
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesClipLoader</c> keeps it loaded until the owner is destroyed.
         /// If null, the manager owns it, so it stays loaded while the manager lives.</param>
         public async void PlaySfx(string path, DuckType duck = DuckType.None, MonoBehaviour owner = null) =>
             PlaySfx(await GetClip(path, false, owner), duck);
@@ -934,8 +934,8 @@ namespace Mane.Unity.SoundManeger
         /// <summary>
         /// Loads and plays a voice line, like <see cref="PlayVoice(AudioClip, float)"/>. A failed load is not retried.
         /// </summary>
-        /// <param name="path">Path of the voice clip for the current <see cref="IMusicLoader"/>.</param>
-        /// <param name="owner">Owner of the loaded clip: <c>AddressablesMusicLoader</c> keeps it loaded until the owner is destroyed.
+        /// <param name="path">Path of the voice clip for the current <see cref="IClipLoader"/>.</param>
+        /// <param name="owner">Owner of the loaded clip: <c>AddressablesClipLoader</c> keeps it loaded until the owner is destroyed.
         /// If null, the manager owns it, so it stays loaded while the manager lives.</param>
         public async void PlayVoice(string path, MonoBehaviour owner = null) =>
             PlayVoice(await GetClip(path, false, owner));
@@ -1025,7 +1025,7 @@ namespace Mane.Unity.SoundManeger
             int index = _loadedMusic.FindIndex(loaded => ReferenceEquals(loaded.clip, clip));
             if (index < 0) return;
 
-            IMusicLoader loader = _loadedMusic[index].loader;
+            IClipLoader loader = _loadedMusic[index].loader;
             _loadedMusic.RemoveAt(index);
             loader.Release(clip);
         }
@@ -1053,7 +1053,7 @@ namespace Mane.Unity.SoundManeger
                     // Taken once, so a newer music request cancels the waiting and the retries of this load too
                     CancellationToken musicToken = GetCancellationToken(true);
                     // The clip is released through the loader that loaded it, even if another one is set later
-                    IMusicLoader loader = _musicLoader;
+                    IClipLoader loader = _clipLoader;
                     Interlocked.Increment(ref _musicLoads);
                     try
                     {
@@ -1070,7 +1070,7 @@ namespace Mane.Unity.SoundManeger
 
                             do
                             {
-                                clip = await loader.GetMusicAsync(null, path, musicToken);
+                                clip = await loader.LoadClipAsync(null, path, musicToken);
 
                                 if (clip != null || !shouldRetry || musicToken.IsCancellationRequested)
                                     break;
@@ -1120,7 +1120,7 @@ namespace Mane.Unity.SoundManeger
                     owner = this;
 
                 // No retries: a sound effect or voice line played seconds late is worse than none
-                AudioClip sfxClip = await _musicLoader.GetMusicAsync(owner, path, token);
+                AudioClip sfxClip = await _clipLoader.LoadClipAsync(owner, path, token);
 
                 if (sfxClip == null && !token.IsCancellationRequested)
                     Debug.LogError($"[SoundManeger] Failed to load SFX clip at path: {path}");
@@ -1263,7 +1263,7 @@ namespace Mane.Unity.SoundManeger
             ClearPlaylist();
 
             // The music sources are not touched: on destroy they can be gone already
-            foreach ((AudioClip clip, IMusicLoader loader) in _loadedMusic)
+            foreach ((AudioClip clip, IClipLoader loader) in _loadedMusic)
                 loader.Release(clip);
             _loadedMusic.Clear();
         }

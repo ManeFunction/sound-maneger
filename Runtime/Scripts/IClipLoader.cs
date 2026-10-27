@@ -6,9 +6,9 @@ namespace Mane.Unity.SoundManeger
 {
     /// <summary>
     /// Loads the clips <see cref="SoundManeger"/> plays by path (music, sound effects and voice).
-    /// Set one with <see cref="SoundManeger.SetMusicLoader"/>.
+    /// Set one with <see cref="SoundManeger.SetClipLoader"/>.
     /// </summary>
-    public interface IMusicLoader
+    public interface IClipLoader
     {
         /// <summary>
         /// Indicates whether the loader should retry loading if it fails.
@@ -25,11 +25,11 @@ namespace Mane.Unity.SoundManeger
         /// <param name="path">Path or key of the clip.</param>
         /// <param name="token">Canceled when the clip is no longer needed.</param>
         /// <returns>The clip, or null if it could not be loaded or the load was canceled.</returns>
-        Task<AudioClip> GetMusicAsync(MonoBehaviour owner, string path, CancellationToken token = default);
+        Task<AudioClip> LoadClipAsync(MonoBehaviour owner, string path, CancellationToken token = default);
 
         /// <summary>
-        /// Releases a clip that <see cref="GetMusicAsync"/> loaded without an owner, once per load. Called on the main thread.
-        /// Does nothing by default, for loaders whose clips need no release, like <see cref="ResourcesMusicLoader"/>.
+        /// Releases a clip that <see cref="LoadClipAsync"/> loaded without an owner, once per load. Called on the main thread.
+        /// Does nothing by default, for loaders whose clips need no release, like <see cref="ResourcesClipLoader"/>.
         /// </summary>
         /// <param name="clip">Clip to release.</param>
         void Release(AudioClip clip) { }
