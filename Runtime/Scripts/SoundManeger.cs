@@ -24,7 +24,7 @@ namespace Mane.Unity.SoundManeger
     [DisallowMultipleComponent]
     // Set up before other scripts, so they can play audio from their own Awake()
     [DefaultExecutionOrder(-1000)]
-    public class SoundManeger : UnitySingleton<SoundManeger>, IDisposable
+    public class SoundManeger : UnitySingleton<SoundManeger>
     {
         /// <summary>
         /// Order of the tracks in a playlist.
@@ -165,7 +165,7 @@ namespace Mane.Unity.SoundManeger
 
         private float _lastCleanupTime;
 
-        private bool _isDisposed;
+        private bool _isDestroyed;
 
         /// <summary>
         /// Whether the manager's music, sound effects and voice keep playing while <see cref="AudioListener.pause"/>
@@ -1040,9 +1040,9 @@ namespace Mane.Unity.SoundManeger
                 return null;
             }
 
-            if (_isDisposed)
+            if (_isDestroyed)
             {
-                Debug.LogWarning("[SoundManeger] Attempted to load clip after disposal!");
+                Debug.LogWarning("[SoundManeger] Attempted to load clip after the manager was destroyed!");
                 return null;
             }
 
@@ -1078,7 +1078,7 @@ namespace Mane.Unity.SoundManeger
                                 Debug.LogWarning($"[SoundManeger] Failed to load music, retrying after {_musicRetryDelay} seconds: {path}");
                                 await Task.Delay(TimeSpan.FromSeconds(_musicRetryDelay), musicToken);
 
-                            } while (!_isDisposed);
+                            } while (!_isDestroyed);
 
                             if (clip == null)
                             {
@@ -1088,8 +1088,8 @@ namespace Mane.Unity.SoundManeger
                                 return null;
                             }
 
-                            // Dispose() has released the other clips already
-                            if (_isDisposed)
+                            // OnDestroy() has released the other clips already
+                            if (_isDestroyed)
                             {
                                 loader.Release(clip);
                                 return null;
@@ -1239,23 +1239,14 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Clears the singleton instance and calls <see cref="Dispose"/>.
+        /// Clears the singleton instance, cancels pending loads, stops the playlist, releases the music loaded by path
+        /// and forgets the sound effects bookkeeping. Overrides should call <c>base.OnDestroy()</c>.
         /// </summary>
         protected override void OnDestroy()
         {
             base.OnDestroy();
-            Dispose();
-        }
 
-        /// <summary>
-        /// Cancels pending loads, stops the playlist, releases the music loaded by path (even the track that is playing)
-        /// and forgets the sound effects bookkeeping. Called on destroy. After it, the manager no longer loads clips by path.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_isDisposed) return;
-            
-            _isDisposed = true;
+            _isDestroyed = true;
 
             _playingSfx.Clear();
             _limitedSfxTimings.Clear();
