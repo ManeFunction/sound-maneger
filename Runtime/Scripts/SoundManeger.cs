@@ -564,7 +564,6 @@ namespace Mane.Unity.SoundManeger
         public void StopMusic()
         {
             StartMusicRequest();
-            PlaylistTrackChange -= OnTrackChange;
             _musicSource1.Stop();
             _musicSource2.Stop();
             ClearPlaylist();
@@ -595,7 +594,6 @@ namespace Mane.Unity.SoundManeger
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
-            PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
 
             return PlayMusicClip(clip);
@@ -643,10 +641,6 @@ namespace Mane.Unity.SoundManeger
             _musicSource1.loop = false;
             _musicSource2.loop = false;
 
-            // safe way to exclude double subscription
-            PlaylistTrackChange -= OnTrackChange;
-            PlaylistTrackChange += OnTrackChange;
-
             if (!startAfterCurrentTrack)
                 return ChangeTrack();
 
@@ -675,7 +669,7 @@ namespace Mane.Unity.SoundManeger
             ReleaseMusic(previous);
         }
 
-        private async void OnTrackChange() => await ChangeTrack();
+        private async void PlayNextTrack() => await ChangeTrack();
 
         // Plays the preloaded track, or loads the current one, then preloads the one after it. True once a track plays
         private async Task<bool> ChangeTrack()
@@ -704,7 +698,6 @@ namespace Mane.Unity.SoundManeger
                     if (!playlist.SkipFailedTrack())
                     {
                         Debug.LogError("[SoundManeger] None of the playlist tracks could be loaded, the playlist is stopped.");
-                        PlaylistTrackChange -= OnTrackChange;
                         ClearPlaylist();
                     }
 
@@ -1060,7 +1053,10 @@ namespace Mane.Unity.SoundManeger
 
             // The playlist track has ended. Tracks do not change while the music is muted, or while music loads
             if (_playlist != null && !_muteMusic && !IsMusicPlaying && _musicLoads == 0)
+            {
+                PlayNextTrack();
                 PlaylistTrackChange?.Invoke();
+            }
         }
 
         /// <summary>
@@ -1082,7 +1078,6 @@ namespace Mane.Unity.SoundManeger
             CancelMusicLoading();
             // The semaphore is not disposed: canceled loads still release it when they finish
 
-            PlaylistTrackChange -= OnTrackChange;
             ClearPlaylist();
 
             // The music sources are not touched: on destroy they can be gone already
