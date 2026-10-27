@@ -33,7 +33,7 @@ Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](htt
 - Moved context "Add component" menu to `Mane Tools -> Audio -> Sound Maneger`.
 - Shuffle and random playlist orders use the manager's own random source (`ManeRandom` from ManeTools-dotNET), so they no longer change the state of `UnityEngine.Random`.
 - `UnityCancellationTokenSource` (internal) moved out of the `Addressables` folder, because it is not Addressables-specific.
-- The sound effect limit moved out of `SoundManeger` into its own internal class, now covered by tests.
+- The playlist order (with its no-repeat and failed-track rules) and the sound effect limit moved out of `SoundManeger` into their own internal classes, now covered by tests.
 
 ### Removed
 - BREAKING CHANGE: `SoundManeger` is no longer `IDisposable`. A public `Dispose` let any caller (a `using` block, or a DI container that disposes its bindings at the end of a scope) shut down the shared manager without destroying it: the manager stayed the singleton, so no new one was ever created, and every later call by path failed while calls by clip still played. The cleanup now runs only in `OnDestroy`; destroy the manager's GameObject to shut it down, and the next `Instance` access creates a new one.

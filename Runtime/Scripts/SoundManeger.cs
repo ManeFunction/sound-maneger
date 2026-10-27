@@ -121,7 +121,6 @@ namespace Mane.Unity.SoundManeger
         // Own random source, so playlists do not change UnityEngine.Random or a seeded global random.
         private readonly IRandom _random = new ManeRandom();
         private readonly SemaphoreSlim _musicLoadingSemaphore = new(1, 1);
-        private readonly object _playlistLock = new();
         // Music loads in progress, the playlist waits for them before it changes the track
         private int _musicLoads;
         // Bumped by every PlayMusic and StopMusic call, see StartMusicRequest()
@@ -137,16 +136,12 @@ namespace Mane.Unity.SoundManeger
         public event Action PlaylistTrackChange;
 
 
-        private List<string> _playlist;
-        // Order of the running playlist, set when it starts
-        private PlayingOrder _activePlayingOrder;
-        private int _playlistPointer;
+        // The running playlist, null when none plays
+        private Playlist _playlist;
         private AudioClip _nextPlaylistTrack;
         // Music clips loaded by path, with the loader to release them with (a clip loaded twice is listed twice).
         // One is released when a music source or the preloaded track lets it go, or when nothing takes it, see ReleaseMusic()
         private readonly List<(AudioClip clip, IClipLoader loader)> _loadedMusic = new();
-        // Playlist tracks in a row that failed to load
-        private int _failedPlaylistTracks;
         private volatile int _modeFlags;
 
         private bool _activeFirstMusicSource;
@@ -566,17 +561,11 @@ namespace Mane.Unity.SoundManeger
             if (tracks.Count == 1)
                 return await LoadSingleTrack(request, tracks[0]);
 
-            // playlist
-            List<string> pl = new(tracks);
+            // playlist, copied before the intro loads, so a caller that changes its list later does not change it
             if (firstTrackIsIntro)
-            {
-                string intro = pl[0];
-                pl.RemoveAt(0);
+                return await StartPlaylistAfterIntro(request, tracks[0], tracks.Skip(1).ToList(), order);
 
-                return await StartPlaylistAfterIntro(request, intro, pl, order);
-            }
-
-            return await StartPlaylist(pl, order, false);
+            return await StartPlaylist(tracks, order, false);
         }
 
         /// <summary>
@@ -637,7 +626,7 @@ namespace Mane.Unity.SoundManeger
         }
 
         // The intro plays once and the playlist starts after it. If the intro does not play, the playlist starts at once.
-        private async Task<bool> StartPlaylistAfterIntro(int request, string intro, List<string> playlist,
+        private async Task<bool> StartPlaylistAfterIntro(int request, string intro, List<string> tracks,
             PlayingOrder order)
         {
             AudioClip clip = await GetClip(intro, true);
@@ -649,49 +638,27 @@ namespace Mane.Unity.SoundManeger
 
             bool introPlays = clip != null && PlaySingleTrack(clip);
 
-            return await StartPlaylist(playlist, order, introPlays);
+            return await StartPlaylist(tracks, order, introPlays);
         }
 
 
         // True once the first track plays, or at once when it starts after the current track
-        private Task<bool> StartPlaylist(List<string> playlist, PlayingOrder order, bool startAfterCurrentTrack)
+        private Task<bool> StartPlaylist(IEnumerable<string> tracks, PlayingOrder order, bool startAfterCurrentTrack)
         {
             // Music is disabled without a mixer, see FillMixerStuff()
             if (_mixer == null) return Task.FromResult(false);
 
             // Drops the previous playlist with its preloaded track
             ClearPlaylist();
+            _playlist = new Playlist(tracks, order, _random);
+            _musicSource1.loop = false;
+            _musicSource2.loop = false;
+            // Music is on from here, so Update() moves on even if the first track fails to load
+            AddMode(PlayMode.NeedMusicSwitch);
 
-            lock (_playlistLock)
-            {
-                _playlist = new List<string>(playlist); // Create defensive copy
-                _activePlayingOrder = order;
-
-                _musicSource1.loop = false;
-                _musicSource2.loop = false;
-                // Music is on from here, so Update() moves on even if the first track fails to load
-                AddMode(PlayMode.NeedMusicSwitch);
-
-                // safe way to exclude double subscription
-                PlaylistTrackChange -= OnTrackChange;
-                PlaylistTrackChange += OnTrackChange;
-            
-                switch (order)
-                {
-                    case PlayingOrder.Default:
-                        _playlistPointer = 0;
-                        break;
-                    
-                    case PlayingOrder.Shuffle:
-                        _playlistPointer = 0;
-                        _playlist.Shuffle(_random);
-                        break;
-
-                    case PlayingOrder.Random:
-                        _playlistPointer = _random.Next(0, _playlist.Count);
-                        break;
-                }
-            }
+            // safe way to exclude double subscription
+            PlaylistTrackChange -= OnTrackChange;
+            PlaylistTrackChange += OnTrackChange;
 
             if (!startAfterCurrentTrack)
                 return ChangeTrack();
@@ -700,166 +667,77 @@ namespace Mane.Unity.SoundManeger
             return Task.FromResult(true);
         }
 
-        private void PrepareNextTrack()
-        {
-            string trackPath = null;
-            lock (_playlistLock)
-            {
-                if (_playlist == null || _playlist.Count == 0) return;
-
-                MovePlaylistPointer();
-
-                // Get the track path while still in the lock
-                trackPath = _playlist[_playlistPointer];
-            }
-
-            // Only proceed if we got a valid track path
-            if (!string.IsNullOrEmpty(trackPath))
-                CacheNextTrack();
-        }
-
-        // Call under _playlistLock
-        private void MovePlaylistPointer()
-        {
-            if (_activePlayingOrder == PlayingOrder.Random)
-            {
-                if (_playlist.Count == 1)
-                {
-                    _playlistPointer = 0;
-                }
-                else
-                {
-                    int old = _playlistPointer;
-                    do
-                    {
-                        _playlistPointer = _random.Next(0, _playlist.Count);
-                    } while (_playlistPointer == old);
-                }
-            }
-            else
-            {
-                _playlistPointer++;
-                if (_playlistPointer >= _playlist.Count)
-                {
-                    _playlistPointer = 0;
-                    var lastTrack = _playlist.Last();
-                    // A list of one repeated track cannot start with another one
-                    if (_activePlayingOrder == PlayingOrder.Shuffle && _playlist.Exists(track => track != lastTrack))
-                    {
-                        do
-                        {
-                            _playlist.Shuffle(_random);
-                        } while (_playlist.First() == lastTrack);
-                    }
-                }
-            }
-        }
-
-        // A track that does not load is skipped, the next Update() tries the one after it.
-        // When none of the tracks loads, the playlist stops.
-        private void SkipFailedTrack()
-        {
-            lock (_playlistLock)
-            {
-                if (_playlist == null || _playlist.Count == 0) return;
-
-                if (++_failedPlaylistTracks < _playlist.Count)
-                {
-                    MovePlaylistPointer();
-                    return;
-                }
-            }
-
-            Debug.LogError("[SoundManeger] None of the playlist tracks could be loaded, the playlist is stopped.");
-            RemoveMode(PlayMode.PlaylistActive);
-            PlaylistTrackChange -= OnTrackChange;
-            ClearPlaylist();
-        }
-
+        // Preloads the current playlist track, to play it with the next ChangeTrack()
         private async void CacheNextTrack()
         {
+            Playlist playlist = _playlist;
+            // An empty path fails when ChangeTrack() loads it, one error is enough
+            if (playlist == null || string.IsNullOrEmpty(playlist.Current)) return;
+
             int request = _musicRequest;
-            string trackPath;
-
-            // Get all needed data under lock
-            lock (_playlistLock)
+            AudioClip clip = await GetClip(playlist.Current, true);
+            if (request != _musicRequest || playlist != _playlist)
             {
-                if (_playlist == null || _playlist.Count == 0) return;
-                trackPath = _playlist[_playlistPointer];
+                ReleaseMusic(clip);
+                return;
             }
 
-            // Only proceed if we have valid data
-            if (!string.IsNullOrEmpty(trackPath))
-            {
-                AudioClip clip = await GetClip(trackPath, true);
-                if (request != _musicRequest)
-                {
-                    ReleaseMusic(clip);
-                    return;
-                }
-
-                // A track preloaded before is let go
-                AudioClip previous = _nextPlaylistTrack;
-                _nextPlaylistTrack = clip;
-                ReleaseMusic(previous);
-            }
+            // A track preloaded before is let go
+            AudioClip previous = _nextPlaylistTrack;
+            _nextPlaylistTrack = clip;
+            ReleaseMusic(previous);
         }
 
         private async void OnTrackChange() => await ChangeTrack();
 
-        // Plays the preloaded track, or loads the current one. True once a track plays
+        // Plays the preloaded track, or loads the current one, then preloads the one after it. True once a track plays
         private async Task<bool> ChangeTrack()
         {
-            bool plays;
-            if (_nextPlaylistTrack)
-            {
-                AudioClip next = _nextPlaylistTrack;
-                _nextPlaylistTrack = null;
-                _failedPlaylistTracks = 0;
-                plays = PlayMusicClip(next);
-                PrepareNextTrack();
-                return plays;
-            }
+            Playlist playlist = _playlist;
+            if (playlist == null) return false;
 
-            int request = _musicRequest;
-            string trackPath;
-            lock (_playlistLock)
-            {
-                if (_playlist == null || _playlist.Count == 0) return false;
-                trackPath = _playlist[_playlistPointer];
-            }
-
-            var clip = await GetClip(trackPath, true);
-            if (request != _musicRequest)
-            {
-                ReleaseMusic(clip);
-                return false;
-            }
-
+            AudioClip clip = _nextPlaylistTrack;
+            _nextPlaylistTrack = null;
             if (!clip)
             {
-                SkipFailedTrack();
-                return false;
+                // A preloaded clip that was destroyed is still listed in _loadedMusic
+                ReleaseMusic(clip);
+
+                int request = _musicRequest;
+                clip = await GetClip(playlist.Current, true);
+                if (request != _musicRequest || playlist != _playlist)
+                {
+                    ReleaseMusic(clip);
+                    return false;
+                }
+
+                if (clip == null)
+                {
+                    // The next Update() tries the track after it. When none of the tracks loads, the playlist stops
+                    if (!playlist.SkipFailedTrack())
+                    {
+                        Debug.LogError("[SoundManeger] None of the playlist tracks could be loaded, the playlist is stopped.");
+                        RemoveMode(PlayMode.PlaylistActive);
+                        PlaylistTrackChange -= OnTrackChange;
+                        ClearPlaylist();
+                    }
+
+                    return false;
+                }
             }
 
-            _failedPlaylistTracks = 0;
-            plays = PlayMusicClip(clip);
-            PrepareNextTrack();
+            playlist.TrackLoaded();
+            bool plays = PlayMusicClip(clip);
+            playlist.MoveNext();
+            CacheNextTrack();
             return plays;
         }
 
         private void ClearPlaylist()
         {
-            AudioClip next;
-            lock (_playlistLock)
-            {
-                next = _nextPlaylistTrack;
-                _playlist = null;
-                _nextPlaylistTrack = null;
-                _playlistPointer = 0;
-                _failedPlaylistTracks = 0;
-            }
-
+            AudioClip next = _nextPlaylistTrack;
+            _playlist = null;
+            _nextPlaylistTrack = null;
             ReleaseMusic(next);
         }
 
