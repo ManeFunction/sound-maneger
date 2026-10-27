@@ -11,7 +11,7 @@ namespace Mane.Unity.SoundManeger.Addressables
 {
     /// <summary>
     /// <see cref="IClipLoader"/> that loads clips by Addressables address. Available when the Addressables package is installed.
-    /// A clip loaded for an owner is held by an <see cref="AddressablesMusicLink"/> on the owner's GameObject and released
+    /// A clip loaded for an owner is held by a hidden component on the owner's GameObject and released
     /// when the owner is destroyed, so every clip loaded for an owner stays in memory until then.
     /// A clip loaded without an owner (music) is held until <see cref="Release"/>.
     /// </summary>
@@ -48,7 +48,7 @@ namespace Mane.Unity.SoundManeger.Addressables
                 if (token.IsCancellationRequested)
                 {
                     // Nobody takes the clip, so it is released as soon as it loads
-                    handle.Completed += OnShouldReleaseHandler;
+                    handle.Completed += ReleaseHandle;
                     return null;
                 }
 
@@ -58,7 +58,7 @@ namespace Mane.Unity.SoundManeger.Addressables
             // Canceled, failed, or there is no owner left to hold the clip
             if (token.IsCancellationRequested || handle.Status != AsyncOperationStatus.Succeeded || hasOwner && !owner)
             {
-                OnShouldReleaseHandler(handle);
+                ReleaseHandle(handle);
                 return null;
             }
 
@@ -68,13 +68,10 @@ namespace Mane.Unity.SoundManeger.Addressables
                 return handle.Result;
             }
 
-            var links = owner.GetComponents<AddressablesMusicLink>();
-            AddressablesMusicLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
+            var links = owner.GetComponents<AddressablesClipLink>();
+            AddressablesClipLink link = links.FirstOrDefault(l => l.Clip == handle.Result);
             if (!link)
-            {
-                link = owner.gameObject.AddComponent<AddressablesMusicLink>();
-                link.ShouldReleaseHandler += OnShouldReleaseHandler;
-            }
+                link = owner.gameObject.AddComponent<AddressablesClipLink>();
 
             link.Bind(handle);
             return handle.Result;
@@ -86,14 +83,15 @@ namespace Mane.Unity.SoundManeger.Addressables
             int index = _ownerlessHandles.FindIndex(handle => handle.IsValid() && ReferenceEquals(handle.Result, clip));
             if (index < 0) return;
 
-            OnShouldReleaseHandler(_ownerlessHandles[index]);
+            ReleaseHandle(_ownerlessHandles[index]);
             _ownerlessHandles.RemoveAt(index);
         }
 
-        private void OnShouldReleaseHandler(AsyncOperationHandle<AudioClip> handler)
+        // Also used by AddressablesClipLink. An invalid handle has nothing to release
+        internal static void ReleaseHandle(AsyncOperationHandle<AudioClip> handle)
         {
-            if (handler.IsValid())
-                AddressablesApi.Release(handler);
+            if (handle.IsValid())
+                AddressablesApi.Release(handle);
         }
     }
 }
