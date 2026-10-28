@@ -2,7 +2,19 @@
 
 Just a neat sound manager for Unity: separate music and SFX channels, crossfaded playlists, ducking, async clip loading and some other handy features.
 
-The package is supported starting from **Unity 6.0.81** (6000.0.81f1) and dependent on [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git). [Addressables](https://docs.unity3d.com/Manual/com.unity.addressables.html) support is optional and turns on by itself when the package is in your project.
+The package is supported from **Unity 6.0.81** (6000.0.81f1) and has dependencies managed automatically with `OpenUPM`. More information is in [Dependencies](#dependencies) section.
+
+- [Features](#features)
+- [Inspector](#inspector)
+- [Mixer](#mixer)
+- [Dependencies](#dependencies)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Scripting](#scripting)
+  - [Loading clips](#loading-clips)
+  - [Your own mixer](#your-own-mixer)
+- [Why Preview?](#why-preview)
+- [Repository info](#repository-info)
 
 ## Features
 
@@ -23,6 +35,12 @@ The package is supported starting from **Unity 6.0.81** (6000.0.81f1) and depend
 ## Mixer
 
 ![](https://raw.githubusercontent.com/wiki/ManeFunction/sound-maneger/mixer.png)
+
+## Dependencies
+
+![](https://raw.githubusercontent.com/wiki/ManeFunction/sound-maneger/dependencies.png)
+
+[ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git) and [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNet.git) are required, and `OpenUPM` installs both. [Addressables](https://docs.unity3d.com/Manual/com.unity.addressables.html) is optional and turns on when that package is in the project.
 
 ## Installation
 
