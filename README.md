@@ -41,6 +41,7 @@ The package is supported from **Unity 6.0.81** (6000.0.81f1) and has dependencie
 ![](https://raw.githubusercontent.com/wiki/ManeFunction/sound-maneger/dependencies.png)
 
 [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git) and [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNet.git) are required, and `OpenUPM` installs both.
+
 [Addressables](https://docs.unity3d.com/Manual/com.unity.addressables.html) is optional and turns on when that package is in the project.
 
 ## Installation
