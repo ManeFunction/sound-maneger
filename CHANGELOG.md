@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Changed
+- Releases are signed with a Unity package signature, so the Package Manager in Unity 6.3 and newer no longer warns that the package is unsigned. Versions up to 2.0.0-preview.1 stay unsigned.
 
 ## [2.0.0-preview.1] - 2026-10-28
 Moved the package to Unity 6 and to my new tool packages: [ManeTools-dotNET](https://github.com/ManeFunction/ManeTools-dotNET.git) and [ManeTools-Unity](https://github.com/ManeFunction/ManeTools-Unity.git) replace the legacy `ManeUtils` dependency. Versioning jumps to 2.0.0 to match the rest of my packages (see my [GitHub](https://github.com/ManeFunction) for more useful Unity tools).
