@@ -112,8 +112,7 @@ namespace Mane.Unity.SoundManeger
         private AudioMixerSnapshot _musicSnapshot;
         private AudioMixerSnapshot _musicLowSnapshot;
         // The two music sources with their group volumes, set up in Awake(). A new track plays on the inactive one,
-        // and the crossfade swaps them. The first track plays on the first source at full volume;
-        // the second one has no clip until then.
+        // and the crossfade swaps them. Both are silent until the first track, which plays on the first source.
         private MusicChannel _activeChannel;
         private MusicChannel _inactiveChannel;
 
@@ -204,7 +203,9 @@ namespace Mane.Unity.SoundManeger
 
             CreateMissingSources();
             _activeChannel = new MusicChannel(_musicSource2, "Music2Volume", 0f);
-            _inactiveChannel = new MusicChannel(_musicSource1, "Music1Volume", 1f);
+            _inactiveChannel = new MusicChannel(_musicSource1, "Music1Volume", 0f);
+            // The mixer starts with the snapshot's group volumes, so it is set to match the gains
+            ApplyMusicGains();
 
             if (!ValidateAudioSources())
             {
@@ -355,8 +356,8 @@ namespace Mane.Unity.SoundManeger
 
 
         /// <summary>
-        /// Crossfade time in seconds between music tracks. A playlist track starts after the previous one has ended,
-        /// so for it this is a fade-in.
+        /// Crossfade time in seconds between music tracks. A track that starts from silence (the first one, one after
+        /// <see cref="StopMusic"/>, or a playlist track, which starts after the previous one has ended) fades in over it.
         /// </summary>
         public float TransitionTime
         {
@@ -545,14 +546,16 @@ namespace Mane.Unity.SoundManeger
         // A separate overload, not an optional parameter, so method groups and UnityEvent bindings keep working
         /// <summary>
         /// Plays a single looped music track from the beginning, crossfading from the current one, and stops a running playlist.
-        /// Cancels music that is still loading from earlier calls.
+        /// Cancels music that is still loading from earlier calls. A track that is still fading out after an earlier call
+        /// keeps playing and fades back in.
         /// </summary>
         /// <param name="clip">Track to play. Null does nothing.</param>
         public void PlayMusic(AudioClip clip) => PlayMusic(clip, false);
 
         /// <summary>
         /// Plays a single looped music track, crossfading from the current one, and stops a running playlist.
-        /// Cancels music that is still loading from earlier calls.
+        /// Cancels music that is still loading from earlier calls. A track that is still fading out after an earlier call
+        /// keeps playing and fades back in.
         /// </summary>
         /// <param name="clip">Track to play. Null does nothing.</param>
         /// <param name="fromCurrentTime">When true, the track starts at the sample the music is already on, so alternate
@@ -615,8 +618,13 @@ namespace Mane.Unity.SoundManeger
         public void StopMusic()
         {
             StartMusicRequest();
+            // A crossfade in progress would keep setting the gains of the stopped sources
+            this.TryKillCoroutine(ref _crossfade);
             _musicSource1.Stop();
             _musicSource2.Stop();
+            _activeChannel.Gain = 0f;
+            _inactiveChannel.Gain = 0f;
+            ApplyMusicGains();
             ClearPlaylist();
 
             // Release the loaded clips and clear the references to allow GC
@@ -910,8 +918,23 @@ namespace Mane.Unity.SoundManeger
                 // fromCurrentTime means two things: the clip starts where the playing music is, and it counts as
                 // another mix of the same piece. Played in sync, the two add like one signal, which changes the headroom
                 bool inSync = fromCurrentTime;
-                int startSample = inSync ? SyncedSample(outgoing.Source, clip) : 0;
-                PlaySource(incoming.Source, clip, startSample);
+
+                // The clip still plays on the source that fades out (a crossfade back to it): it keeps playing
+                // and fades back in from where it is
+                if (incoming.Source.clip == clip && incoming.Source.isPlaying)
+                {
+                    ReleaseMusic(clip);
+                }
+                else
+                {
+                    // Any other clip starts from silence. In a crossfade that cuts into another, the track it replaces
+                    // stops at once, so the new one must not start at that track's level
+                    int startSample = inSync ? SyncedSample(outgoing.Source, clip) : 0;
+                    incoming.Gain = 0f;
+                    incoming.Apply(_mixer);
+                    PlaySource(incoming.Source, clip, startSample);
+                }
+
                 (_activeChannel, _inactiveChannel) = (incoming, outgoing);
                 this.TryKillCoroutine(ref _crossfade);
                 _crossfade = StartCoroutine(MusicTransition(outgoing, incoming, inSync));
