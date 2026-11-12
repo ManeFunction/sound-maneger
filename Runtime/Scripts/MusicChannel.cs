@@ -20,10 +20,6 @@ namespace Mane.Unity.SoundManeger
         }
 
         // Sets the exposed group volume from the gain. Once set, it no longer follows the snapshots
-        public void Apply(AudioMixer mixer) => mixer.SetFloat(VolumeParameter, ToDecibels(Gain));
-
-        // Gain (amplitude from 0 to 1) to the mixer's -80..0 dB
-        private static float ToDecibels(float gain) =>
-            gain > 0.0001f ? 20f * Mathf.Log10(gain) : -80f;
+        public void Apply(AudioMixer mixer) => mixer.SetFloat(VolumeParameter, MixerContract.GainToDecibels(Gain));
     }
 }

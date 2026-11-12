@@ -196,14 +196,14 @@ namespace Mane.Unity.SoundManeger
             FillMixerStuff();
 
             // The volumes restored on unmute start from the mixer
-            if (TryGetVolume("BgmVolume", out float bgmVolume))
+            if (TryGetVolume(MixerContract.BgmVolume, out float bgmVolume))
                 _cachedBgmVolume = bgmVolume;
-            if (TryGetVolume("SfxVolume", out float sfxVolume))
+            if (TryGetVolume(MixerContract.SfxVolume, out float sfxVolume))
                 _cachedSfxVolume = sfxVolume;
 
             CreateMissingSources();
-            _activeChannel = new MusicChannel(_musicSource2, "Music2Volume", 0f);
-            _inactiveChannel = new MusicChannel(_musicSource1, "Music1Volume", 0f);
+            _activeChannel = new MusicChannel(_musicSource2, MixerContract.Music2Volume, 0f);
+            _inactiveChannel = new MusicChannel(_musicSource1, MixerContract.Music1Volume, 0f);
             // The mixer starts with the snapshot's group volumes, so it is set to match the gains
             ApplyMusicGains();
 
@@ -249,12 +249,12 @@ namespace Mane.Unity.SoundManeger
                 return;
             }
 
-            _musicSnapshot = _mixer.FindSnapshot("Music");
-            _musicLowSnapshot = _mixer.FindSnapshot("MusicLowpass");
+            _musicSnapshot = _mixer.FindSnapshot(MixerContract.MusicSnapshot);
+            _musicLowSnapshot = _mixer.FindSnapshot(MixerContract.MusicLowpassSnapshot);
 
             // The crossfade sets the music group volumes, so it needs them exposed
             if (_musicSnapshot == null ||
-                !_mixer.GetFloat("Music1Volume", out _) || !_mixer.GetFloat("Music2Volume", out _))
+                !_mixer.GetFloat(MixerContract.Music1Volume, out _) || !_mixer.GetFloat(MixerContract.Music2Volume, out _))
             {
                 Debug.LogError("[SoundManeger] Missing required Music snapshot or exposed Music1Volume/Music2Volume! " +
                                "Music features will be disabled.");
@@ -277,11 +277,11 @@ namespace Mane.Unity.SoundManeger
                 _duckBgmSource != null || _duckAllSource != null)
                 return;
 
-            _musicSource1 = CreateSource("Master/BGM/Music1");
-            _musicSource2 = CreateSource("Master/BGM/Music2");
-            _sfxSource = CreateSource("Master/SFX/Effects");
-            _duckBgmSource = CreateSource("Master/SFX/FadeBgm");
-            _duckAllSource = CreateSource("Master/SFX/FadeAll");
+            _musicSource1 = CreateSource(MixerContract.Music1Group);
+            _musicSource2 = CreateSource(MixerContract.Music2Group);
+            _sfxSource = CreateSource(MixerContract.EffectsGroup);
+            _duckBgmSource = CreateSource(MixerContract.FadeBgmGroup);
+            _duckAllSource = CreateSource(MixerContract.FadeAllGroup);
         }
 
         private AudioSource CreateSource(string groupPath)
@@ -331,25 +331,25 @@ namespace Mane.Unity.SoundManeger
         /// Mixer group (<c>Master/BGM/MusicAdd</c>) for your own music sources, so they follow the music volume.
         /// Null without a mixer or such a group.
         /// </summary>
-        public AudioMixerGroup MusicGroup => FindGroup("Master/BGM/MusicAdd");
+        public AudioMixerGroup MusicGroup => FindGroup(MixerContract.MusicAddGroup);
 
         /// <summary>
         /// Mixer group (<c>Master/SFX/Effects</c>) for your own sound effect sources.
         /// Null without a mixer or such a group.
         /// </summary>
-        public AudioMixerGroup SfxGroup => FindGroup("Master/SFX/Effects");
+        public AudioMixerGroup SfxGroup => FindGroup(MixerContract.EffectsGroup);
 
         /// <summary>
         /// Mixer group (<c>Master/SFX/FadeBgm</c>) for your own sources that duck the music, like <see cref="DuckType.MusicOnly"/>.
         /// Null without a mixer or such a group.
         /// </summary>
-        public AudioMixerGroup SfxDuckMusicGroup => FindGroup("Master/SFX/FadeBgm");
+        public AudioMixerGroup SfxDuckMusicGroup => FindGroup(MixerContract.FadeBgmGroup);
 
         /// <summary>
         /// Mixer group (<c>Master/SFX/FadeAll</c>) for your own sources that duck the music and the other sound effects,
         /// like <see cref="DuckType.AllSources"/>. Null without a mixer or such a group.
         /// </summary>
-        public AudioMixerGroup SfxDuckAllGroup => FindGroup("Master/SFX/FadeAll");
+        public AudioMixerGroup SfxDuckAllGroup => FindGroup(MixerContract.FadeAllGroup);
 
         private AudioMixerGroup FindGroup(string path) =>
             _mixer != null ? _mixer.FindMatchingGroups(path).FirstOrDefault() : null;
@@ -415,7 +415,7 @@ namespace Mane.Unity.SoundManeger
             {
                 // Playlist tracks do not change while muted, see Update()
                 _muteMusic = value;
-                SetVolume("BgmVolume", value ? 0 : _cachedBgmVolume);
+                SetVolume(MixerContract.BgmVolume, value ? 0 : _cachedBgmVolume);
             }
         }
         
@@ -428,7 +428,7 @@ namespace Mane.Unity.SoundManeger
             set
             {
                 _muteSfx = value;
-                SetVolume("SfxVolume", value ? 0 : _cachedSfxVolume);
+                SetVolume(MixerContract.SfxVolume, value ? 0 : _cachedSfxVolume);
             }
         }
         
@@ -437,8 +437,8 @@ namespace Mane.Unity.SoundManeger
         /// </summary>
         public float MasterVolume
         {
-            get => GetVolume("MasterVolume");
-            set => SetVolume("MasterVolume", value);
+            get => GetVolume(MixerContract.MasterVolume);
+            set => SetVolume(MixerContract.MasterVolume, value);
         }
 
         /// <summary>
@@ -453,7 +453,7 @@ namespace Mane.Unity.SoundManeger
                 _cachedBgmVolume = Mathf.Clamp01(value);
 
                 if (!MuteMusic)
-                    SetVolume("BgmVolume", _cachedBgmVolume);
+                    SetVolume(MixerContract.BgmVolume, _cachedBgmVolume);
             }
         }
         
@@ -469,7 +469,7 @@ namespace Mane.Unity.SoundManeger
                 _cachedSfxVolume = Mathf.Clamp01(value);
 
                 if (!MuteSfx)
-                    SetVolume("SfxVolume", _cachedSfxVolume);
+                    SetVolume(MixerContract.SfxVolume, _cachedSfxVolume);
             }
         }
 
@@ -481,7 +481,7 @@ namespace Mane.Unity.SoundManeger
             if (_mixer == null || !_mixer.GetFloat(key, out float value))
                 return false;
 
-            volume = (value + 80.0f) / 100.0f;
+            volume = MixerContract.DecibelsToLevel(value);
 
             return true;
         }
@@ -490,14 +490,7 @@ namespace Mane.Unity.SoundManeger
         {
             if (_mixer == null) return;
 
-            if (value < 0.0f)
-                value = 0.0f;
-            else if (value > 1.0f)
-                value = 1.0f;
-
-            value = value * 100.0f - 80.0f;
-
-            _mixer.SetFloat(key, value);
+            _mixer.SetFloat(key, MixerContract.LevelToDecibels(value));
         }
         
         
