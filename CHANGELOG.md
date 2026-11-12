@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The crossfade math (the fade curves, the headroom that keeps the two tracks as loud as one, and the start sample of a track played from the current time) moved out of `SoundManeger` into its own internal class, covered by tests. So did the mixer contract: the names of the snapshots, exposed parameters and groups the manager needs, and its two volume mappings to decibels (linear for `BgmVolume`, `SfxVolume` and `MasterVolume`, logarithmic for the crossfade).
 
 ### Fixed
-- The `Music1` and `Music2` snapshots of the package mixer had different settings for the sound effect ducking compressors, so the ducking changed with every track change. The single `Music` snapshot has one set.
+- The `Music1` and `Music2` snapshots of the package mixer had different settings for the sound effect ducking compressors, so the ducking changed with every track change. The single `Music` snapshot has one set, and `MusicLowpass` has the same one (the lowpass snapshots had none, so turning the lowpass on or off changed the ducking too). The two snapshots now differ only in the lowpass.
 
 ## [2.0.0-preview.2] - 2026-10-30
 ### Added
