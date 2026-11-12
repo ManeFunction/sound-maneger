@@ -907,11 +907,14 @@ namespace Mane.Unity.SoundManeger
             // The sources loop already, or not for a playlist, see PlaySingleTrack() and StartPlaylist()
             try
             {
-                int startSample = fromCurrentTime ? SyncedSample(outgoing.Source, clip) : 0;
+                // fromCurrentTime means two things: the clip starts where the playing music is, and it counts as
+                // another mix of the same piece. Played in sync, the two add like one signal, which changes the headroom
+                bool inSync = fromCurrentTime;
+                int startSample = inSync ? SyncedSample(outgoing.Source, clip) : 0;
                 PlaySource(incoming.Source, clip, startSample);
                 (_activeChannel, _inactiveChannel) = (incoming, outgoing);
                 this.TryKillCoroutine(ref _crossfade);
-                _crossfade = StartCoroutine(MusicTransition(outgoing, incoming, fromCurrentTime));
+                _crossfade = StartCoroutine(MusicTransition(outgoing, incoming, inSync));
             }
             catch (Exception e)
             {
@@ -943,10 +946,10 @@ namespace Mane.Unity.SoundManeger
         }
 
         // Crossfades from the outgoing channel to the incoming one along the fade curves, then stops the outgoing one.
-        // sameMusic: the tracks are mixes of one piece, playing in sync (fromCurrentTime)
-        private IEnumerator MusicTransition(MusicChannel outgoing, MusicChannel incoming, bool sameMusic)
+        // inSync: the tracks are mixes of one piece, playing in sync (fromCurrentTime)
+        private IEnumerator MusicTransition(MusicChannel outgoing, MusicChannel incoming, bool inSync)
         {
-            MusicCrossfade crossfade = new(incoming.Gain, outgoing.Gain, _fadeInCurve, _fadeOutCurve, sameMusic);
+            MusicCrossfade crossfade = new(incoming.Gain, outgoing.Gain, _fadeInCurve, _fadeOutCurve, inSync);
             for (float time = 0f; time < _transitionTime; time += Time.unscaledDeltaTime)
             {
                 (incoming.Gain, outgoing.Gain) = crossfade.At(time / _transitionTime);

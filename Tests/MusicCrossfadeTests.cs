@@ -9,8 +9,8 @@ namespace Mane.Unity.SoundManeger.Tests
         private const float Tolerance = 0.02f;
         private const int Steps = 50;
 
-        private static MusicCrossfade Default(bool sameMusic) =>
-            new(0f, 1f, Easing.SinOut, Easing.SinIn, sameMusic);
+        private static MusicCrossfade Default(bool inSync) =>
+            new(0f, 1f, Easing.SinOut, Easing.SinIn, inSync);
 
         [Test]
         public void DefaultCurves_KeepPowerConstant()
@@ -38,7 +38,7 @@ namespace Mane.Unity.SoundManeger.Tests
         }
 
         [Test]
-        public void SameMusic_AmplitudesNeverAddAboveOne()
+        public void InSync_AmplitudesNeverAddAboveOne()
         {
             MusicCrossfade crossfade = Default(true);
 
@@ -119,7 +119,7 @@ namespace Mane.Unity.SoundManeger.Tests
         }
 
         [Test]
-        public void Headroom_SameMusic_IsAmplitudeComplement()
+        public void Headroom_InSync_IsAmplitudeComplement()
         {
             Assert.AreEqual(0.2f, MusicCrossfade.Headroom(0.8f, true), 1e-5f);
         }
