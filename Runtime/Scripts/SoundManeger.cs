@@ -936,33 +936,25 @@ namespace Mane.Unity.SoundManeger
         private static int SyncedSample(AudioSource playing, AudioClip clip)
         {
             AudioClip playingClip = playing.clip;
-            if (!playing.isPlaying || playingClip == null || playingClip.frequency <= 0 || clip.samples <= 0)
+            if (!playing.isPlaying || playingClip == null)
                 return 0;
 
-            return (int)((long)playing.timeSamples * clip.frequency / playingClip.frequency % clip.samples);
+            return MusicCrossfade.SyncedSample(playing.timeSamples, playingClip.frequency, clip.frequency, clip.samples);
         }
 
         // Crossfades from the outgoing channel to the incoming one along the fade curves, then stops the outgoing one.
-        // Each channel starts from the gain it has, so a crossfade that cuts into another does not jump.
         // sameMusic: the tracks are mixes of one piece, playing in sync (fromCurrentTime)
         private IEnumerator MusicTransition(MusicChannel outgoing, MusicChannel incoming, bool sameMusic)
         {
-            float outgoingFrom = outgoing.Gain;
-            float incomingFrom = incoming.Gain;
+            MusicCrossfade crossfade = new(incoming.Gain, outgoing.Gain, _fadeInCurve, _fadeOutCurve, sameMusic);
             for (float time = 0f; time < _transitionTime; time += Time.unscaledDeltaTime)
             {
-                float progress = time / _transitionTime;
-                // Overshooting curves (Back, Elastic) stay within 0..1, the music never goes above 0 dB
-                incoming.Gain = Mathf.Clamp01(incomingFrom + (1f - incomingFrom) * Evaluate(_fadeInCurve, progress));
-                outgoing.Gain = Mathf.Clamp01(outgoingFrom * (1f - Evaluate(_fadeOutCurve, progress)));
-                outgoing.Gain = Mathf.Min(outgoing.Gain, Headroom(incoming.Gain, sameMusic));
-
+                (incoming.Gain, outgoing.Gain) = crossfade.At(time / _transitionTime);
                 ApplyMusicGains();
                 yield return null;
             }
 
-            incoming.Gain = 1f;
-            outgoing.Gain = 0f;
+            (incoming.Gain, outgoing.Gain) = crossfade.At(1f);
             ApplyMusicGains();
 
             outgoing.Source.Stop();
@@ -970,16 +962,6 @@ namespace Mane.Unity.SoundManeger
             SetMusicClip(outgoing.Source, null);
             _crossfade = null;
         }
-
-        // The loudest the outgoing track can be next to the incoming one, so together they are as loud as one track.
-        // Different tracks are uncorrelated, so their powers add (+3 dB for two equal ones): the outgoing amplitude
-        // is at most sqrt(1 - incoming²). Mixes of one piece in sync add like one signal (+6 dB): their amplitudes add.
-        private static float Headroom(float incoming, bool sameMusic) =>
-            sameMusic ? 1f - incoming : Mathf.Sqrt(1f - incoming * incoming);
-
-        // An empty curve evaluates to 0, which would never fade, so it counts as linear
-        private static float Evaluate(AnimationCurve curve, float time) =>
-            curve != null && curve.length > 0 ? curve.Evaluate(time) : time;
 
         // Puts a clip on a music source and releases the loaded clip it replaces
         private void SetMusicClip(AudioSource source, AudioClip clip)
