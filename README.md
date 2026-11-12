@@ -96,8 +96,8 @@ sound.PlayVoice("Voice/Hello", this);             // the clip belongs to this ob
 
 // Mixing
 sound.TransitionTime = 2f;                        // crossfade time in seconds
-sound.FadeOutCurve = Easing.QuadOut.Clone();      // easing of the outgoing track
-sound.FadeInCurve = Easing.QuadIn.Clone();        // easing of the incoming track
+sound.FadeOutCurve = Easing.QuadIn.Clone();       // easing of the outgoing track: slow at first
+sound.FadeInCurve = Easing.QuadOut.Clone();       // easing of the incoming track: fast at first, so no dip
 sound.Lowpass(true);
 sound.MasterVolume = 0.8f;                        // 0..1, 0.8 is 0 dB
 sound.BgmVolume = 0.6f;
