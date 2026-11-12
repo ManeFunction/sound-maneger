@@ -111,10 +111,11 @@ namespace Mane.Unity.SoundManeger
         
         private AudioMixerSnapshot _musicSnapshot;
         private AudioMixerSnapshot _musicLowSnapshot;
-        // Volume of each music source from 0 to 1, set to the exposed Music1Volume / Music2Volume.
+        // Gain (amplitude from 0 to 1, not the linear-dB 0..1 of BgmVolume) of each music source,
+        // set to the exposed Music1Volume / Music2Volume.
         // The first track plays on the first source at full volume; the second one has no clip until then.
-        private float _music1Volume = 1f;
-        private float _music2Volume;
+        private float _music1Gain = 1f;
+        private float _music2Gain;
 
         // Set here, not in Awake(), so a SetClipLoader() call made before Awake() is kept
         private IClipLoader _clipLoader = new ResourcesClipLoader();
@@ -130,7 +131,8 @@ namespace Mane.Unity.SoundManeger
         private UnityCancellationTokenSource _sfxCancellationSource;
         private UnityCancellationTokenSource _musicCancellationSource;
 
-        private Coroutine _transitionAwaiter;
+        // The running music crossfade, null when none runs
+        private Coroutine _crossfade;
 
         /// <summary>
         /// Raised when the current playlist track has ended and the next one starts.
@@ -530,18 +532,18 @@ namespace Mane.Unity.SoundManeger
         // A missing lowpass snapshot is reported by FillMixerStuff()
         private bool HasLowpass => _mixer != null && _musicLowSnapshot != null;
 
-        // Sets the exposed music group volumes. Once set, they no longer follow the snapshots
-        private void ApplyMusicVolumes()
+        // Sets the exposed music group volumes from the gains. Once set, they no longer follow the snapshots
+        private void ApplyMusicGains()
         {
             if (_mixer == null) return;
 
-            _mixer.SetFloat("Music1Volume", ToDecibels(_music1Volume));
-            _mixer.SetFloat("Music2Volume", ToDecibels(_music2Volume));
+            _mixer.SetFloat("Music1Volume", ToDecibels(_music1Gain));
+            _mixer.SetFloat("Music2Volume", ToDecibels(_music2Gain));
         }
 
-        // Amplitude from 0 to 1 to the mixer's -80..0 dB
-        private static float ToDecibels(float volume) =>
-            volume > 0.0001f ? 20f * Mathf.Log10(volume) : -80f;
+        // Gain (amplitude from 0 to 1) to the mixer's -80..0 dB
+        private static float ToDecibels(float gain) =>
+            gain > 0.0001f ? 20f * Mathf.Log10(gain) : -80f;
 
 
         // A separate overload, not an optional parameter, so method groups and UnityEvent bindings keep working
@@ -911,15 +913,15 @@ namespace Mane.Unity.SoundManeger
                 {
                     PlaySource(_musicSource2, clip, fromCurrentTime);
                     _activeFirstMusicSource = false;
-                    this.TryKillCoroutine(ref _transitionAwaiter);
-                    _transitionAwaiter = StartCoroutine(MusicTransition(_musicSource1, false, fromCurrentTime));
+                    this.TryKillCoroutine(ref _crossfade);
+                    _crossfade = StartCoroutine(MusicTransition(_musicSource1, false, fromCurrentTime));
                 }
                 else
                 {
                     PlaySource(_musicSource1, clip, fromCurrentTime);
                     _activeFirstMusicSource = true;
-                    this.TryKillCoroutine(ref _transitionAwaiter);
-                    _transitionAwaiter = StartCoroutine(MusicTransition(_musicSource2, true, fromCurrentTime));
+                    this.TryKillCoroutine(ref _crossfade);
+                    _crossfade = StartCoroutine(MusicTransition(_musicSource2, true, fromCurrentTime));
                 }
             }
             catch (Exception e)
@@ -956,12 +958,12 @@ namespace Mane.Unity.SoundManeger
         }
 
         // Crossfades from this source to the other one along the fade curves, then stops this one.
-        // Each source starts from the volume it has, so a crossfade that cuts into another does not jump.
+        // Each source starts from the gain it has, so a crossfade that cuts into another does not jump.
         // sameMusic: the tracks are mixes of one piece, playing in sync (fromCurrentTime)
         private IEnumerator MusicTransition(AudioSource source, bool toFirstSource, bool sameMusic)
         {
-            float outgoingFrom = toFirstSource ? _music2Volume : _music1Volume;
-            float incomingFrom = toFirstSource ? _music1Volume : _music2Volume;
+            float outgoingFrom = toFirstSource ? _music2Gain : _music1Gain;
+            float incomingFrom = toFirstSource ? _music1Gain : _music2Gain;
             for (float time = 0f; time < _transitionTime; time += Time.unscaledDeltaTime)
             {
                 float progress = time / _transitionTime;
@@ -970,18 +972,18 @@ namespace Mane.Unity.SoundManeger
                 float outgoing = Mathf.Clamp01(outgoingFrom * (1f - Evaluate(_fadeOutCurve, progress)));
                 outgoing = Mathf.Min(outgoing, Headroom(incoming, sameMusic));
 
-                SetMusicVolumes(toFirstSource, incoming, outgoing);
-                ApplyMusicVolumes();
+                SetMusicGains(toFirstSource, incoming, outgoing);
+                ApplyMusicGains();
                 yield return null;
             }
 
-            SetMusicVolumes(toFirstSource, 1f, 0f);
-            ApplyMusicVolumes();
+            SetMusicGains(toFirstSource, 1f, 0f);
+            ApplyMusicGains();
 
             source.Stop();
             // The faded out track is no longer needed
             SetMusicClip(source, null);
-            _transitionAwaiter = null;
+            _crossfade = null;
         }
 
         // The loudest the outgoing track can be next to the incoming one, so together they are as loud as one track.
@@ -990,10 +992,10 @@ namespace Mane.Unity.SoundManeger
         private static float Headroom(float incoming, bool sameMusic) =>
             sameMusic ? 1f - incoming : Mathf.Sqrt(1f - incoming * incoming);
 
-        private void SetMusicVolumes(bool toFirstSource, float incoming, float outgoing)
+        private void SetMusicGains(bool toFirstSource, float incoming, float outgoing)
         {
-            _music1Volume = toFirstSource ? incoming : outgoing;
-            _music2Volume = toFirstSource ? outgoing : incoming;
+            _music1Gain = toFirstSource ? incoming : outgoing;
+            _music2Gain = toFirstSource ? outgoing : incoming;
         }
 
         // An empty curve evaluates to 0, which would never fade, so it counts as linear
