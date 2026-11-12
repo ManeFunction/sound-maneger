@@ -543,7 +543,15 @@ namespace Mane.Unity.SoundManeger
         private static float ToDecibels(float volume) =>
             volume > 0.0001f ? 20f * Mathf.Log10(volume) : -80f;
 
-        
+
+        // A separate overload, not an optional parameter, so method groups and UnityEvent bindings keep working
+        /// <summary>
+        /// Plays a single looped music track from the beginning, crossfading from the current one, and stops a running playlist.
+        /// Cancels music that is still loading from earlier calls.
+        /// </summary>
+        /// <param name="clip">Track to play. Null does nothing.</param>
+        public void PlayMusic(AudioClip clip) => PlayMusic(clip, false);
+
         /// <summary>
         /// Plays a single looped music track, crossfading from the current one, and stops a running playlist.
         /// Cancels music that is still loading from earlier calls.
@@ -551,7 +559,7 @@ namespace Mane.Unity.SoundManeger
         /// <param name="clip">Track to play. Null does nothing.</param>
         /// <param name="fromCurrentTime">When true, the track starts at the sample the music is already on, so alternate
         /// mixes of one piece switch without a jump. With no music playing it starts from the beginning.</param>
-        public void PlayMusic(AudioClip clip, bool fromCurrentTime = false)
+        public void PlayMusic(AudioClip clip, bool fromCurrentTime)
         {
             if (clip == null) return;
 

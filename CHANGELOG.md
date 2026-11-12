@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 ### Added
-- `PlayMusic(AudioClip, fromCurrentTime)` starts that track at the sample the music is already on and crossfades to it as usual, so alternate mixes of one piece switch without a jump. `PlayMusic(AudioClip)` still starts from the beginning.
+- `PlayMusic(AudioClip, fromCurrentTime)` starts that track at the sample the music is already on and crossfades to it as usual, so alternate mixes of one piece switch without a jump. It is a new overload: `PlayMusic(AudioClip)` stays as it was and still starts from the beginning, so method groups and `UnityEvent` bindings to it keep working.
 - Added `Fade Out Curve` and `Fade In Curve` settings (`FadeOutCurve` and `FadeInCurve` in code): easing curves for the outgoing and the incoming track of a music crossfade, with the `EasingCurve` preset dropdown in the inspector. The incoming track follows its curve as is, and the outgoing one also yields to it, so the two together are never louder than one track: their powers add up to at most 1 (different tracks add +3 dB), or their amplitudes when `PlayMusic(clip, true)` switches between mixes of one piece (+6 dB). The defaults, `SinIn` for the fade-out and `SinOut` for the fade-in, keep the loudness of different tracks constant through the crossfade.
 
 ### Changed
