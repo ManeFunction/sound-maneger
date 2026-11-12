@@ -141,7 +141,7 @@ For any other source, implement `IClipLoader`: `LoadClipAsync(owner, path, token
 The package mixer works out of the box. If you make your own (or copy and change the package one), it needs:
 
 - Snapshot `Music`, plus `MusicLowpass` for the lowpass filter (the lowpass is disabled without it). They differ only in the lowpass.
-- Exposed parameters `Music1Volume` and `Music2Volume`, the volumes of the two music groups, which the manager sets during crossfades. Without them, or without the `Music` snapshot, the music is disabled.
+- Exposed parameters `Music1Volume` and `Music2Volume`, the volumes of the two music groups, which the manager sets during crossfades, between -80 dB and 0 dB (full volume). It overrides the levels you set on these groups, so turn the music down on the `BGM` group instead. Without them, or without the `Music` snapshot, the manager does not use the mixer at all: the music, the sound effects and the volume properties are disabled.
 - Exposed parameters `MasterVolume`, `BgmVolume`, and `SfxVolume`.
 - Groups `Master/BGM/MusicAdd`, `Master/SFX/Effects`, `Master/SFX/FadeBgm`, and `Master/SFX/FadeAll`, if you use the matching group properties or let the manager create its own sources (it also uses `Master/BGM/Music1` and `Master/BGM/Music2`).
 

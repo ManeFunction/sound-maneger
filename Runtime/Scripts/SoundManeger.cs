@@ -256,8 +256,9 @@ namespace Mane.Unity.SoundManeger
             if (_musicSnapshot == null ||
                 !_mixer.GetFloat(MixerContract.Music1Volume, out _) || !_mixer.GetFloat(MixerContract.Music2Volume, out _))
             {
+                // Without a mixer, the sound effects and the volumes are off too
                 Debug.LogError("[SoundManeger] Missing required Music snapshot or exposed Music1Volume/Music2Volume! " +
-                               "Music features will be disabled.");
+                               "Music, sound effects and volume features will be disabled.");
                 _mixer = null;
                 return;
             }
