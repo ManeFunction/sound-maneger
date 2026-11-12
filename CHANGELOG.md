@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- `PlayMusic(AudioClip, fromCurrentTime)` starts that track at the sample the music is already on and crossfades to it as usual, so alternate mixes of one piece switch without a jump. `PlayMusic(AudioClip)` still starts from the beginning.
+- Added `Fade Out Curve` and `Fade In Curve` settings (`FadeOutCurve` and `FadeInCurve` in code): easing curves for the outgoing and the incoming track of a music crossfade, with the `EasingCurve` preset dropdown in the inspector. The incoming track follows its curve as is, and the outgoing one also yields to it, so the two together are never louder than one track: their powers add up to at most 1 (different tracks add +3 dB), or their amplitudes when `PlayMusic(clip, true)` switches between mixes of one piece (+6 dB). The defaults, `SinIn` for the fade-out and `SinOut` for the fade-in, keep the loudness of different tracks constant through the crossfade.
+
+### Changed
+- BREAKING CHANGE: Music crossfades set each music group's volume by itself, through the new exposed parameters `Music1Volume` and `Music2Volume`, instead of crossfading between snapshots. A snapshot transition interpolated the volumes in dB, so in the middle of a crossfade both tracks were at about -40 dB, which made an audible dip. The snapshots `Music1`, `Music2`, `Music1Lowpass` and `Music2Lowpass` are replaced by `Music` and `MusicLowpass`, which only switch the lowpass. Your own mixer needs the `Music` snapshot and the two exposed volumes, or the music is disabled; `MusicLowpass` is optional, as before.
+- The lowpass no longer interferes with crossfades: turning it on or off during a crossfade used to cut the crossfade down to the lowpass time, and a crossfade that started during a lowpass change stretched that change to the crossfade time.
+
+### Fixed
+- The `Music1` and `Music2` snapshots of the package mixer had different settings for the sound effect ducking compressors, so the ducking changed with every track change. The single `Music` snapshot has one set.
 
 ## [2.0.0-preview.2] - 2026-10-30
 ### Added

@@ -18,7 +18,7 @@ The package is supported from **Unity 6.0.81** (6000.0.81f1) and has dependencie
 
 ## Features
 
-- Music on two sources crossfaded through `AudioMixer` snapshots, so every track change is smooth.
+- Music on two sources crossfaded through their `AudioMixer` group volumes, so every track change is smooth. The fade-out and fade-in each follow an easing curve, picked from the easing presets of ManeTools-Unity or drawn by hand. The outgoing track yields to the incoming one by how sound adds up, so the overlap is never louder than one track. The defaults, `SinIn` out and `SinOut` in, keep the loudness constant.
 - Playlists in default, random, or shuffled order (random and shuffle never play the same track twice in a row), with an optional intro track that plays only once. The next track is preloaded while the current one plays, and a track that fails to load is skipped.
 - Sound effects that can duck the music, or the music and all other sound effects, with a limit of how many copies of the same clip play at once.
 - Voice lines that duck the music by themselves.
@@ -73,15 +73,17 @@ You can also add the component from `Add Component -> Mane Tools -> Audio -> Sou
 ### Scripting
 
 ```csharp
+using Mane.Unity;                                 // Easing
 using Mane.Unity.SoundManeger;
 
 SoundManeger sound = SoundManeger.Instance;
 
 // Music
-sound.PlayMusic(menuTheme);                       // a looped track, crossfaded from the current one
-sound.PlayMusic("Music/Menu");                    // loaded by path, then played the same way
-sound.PlayPlaylist(new[] { "Music/Intro",         // the intro plays once,
-    "Music/Level1", "Music/Level2" }, true);      // then the playlist
+sound.PlayMusic(menuTheme);                        // a looped track, crossfaded from the current one
+sound.PlayMusic(battleMix, fromCurrentTime: true); // another mix, the same sample of the piece
+sound.PlayMusic("Music/Menu");                     // loaded by path, then played the same way
+sound.PlayPlaylist(new[] { "Music/Intro",          // the intro plays once,
+    "Music/Level1", "Music/Level2" }, true);       // then the playlist
 sound.PlayPlaylist(new[] { "Music/A", "Music/B", "Music/C" },
     playingOrder: SoundManeger.PlayingOrder.Shuffle);   // this playlist is shuffled
 sound.PlaylistPlayingOrder = SoundManeger.PlayingOrder.Random;   // for playlists that set no order
@@ -93,6 +95,9 @@ sound.PlaySfx("Sfx/Explosion", SoundManeger.DuckType.MusicOnly);
 sound.PlayVoice("Voice/Hello", this);             // the clip belongs to this object
 
 // Mixing
+sound.TransitionTime = 2f;                        // crossfade time in seconds
+sound.FadeOutCurve = Easing.QuadOut.Clone();      // easing of the outgoing track
+sound.FadeInCurve = Easing.QuadIn.Clone();        // easing of the incoming track
 sound.Lowpass(true);
 sound.MasterVolume = 0.8f;                        // 0..1, 0.8 is 0 dB
 sound.BgmVolume = 0.6f;
@@ -135,7 +140,8 @@ For any other source, implement `IClipLoader`: `LoadClipAsync(owner, path, token
 
 The package mixer works out of the box. If you make your own (or copy and change the package one), it needs:
 
-- Snapshots `Music1` and `Music2`, where only that music source is audible, plus `Music1Lowpass` and `Music2Lowpass` for the lowpass filter.
+- Snapshot `Music`, plus `MusicLowpass` for the lowpass filter (the lowpass is disabled without it). They differ only in the lowpass.
+- Exposed parameters `Music1Volume` and `Music2Volume`, the volumes of the two music groups, which the manager sets during crossfades. Without them, or without the `Music` snapshot, the music is disabled.
 - Exposed parameters `MasterVolume`, `BgmVolume`, and `SfxVolume`.
 - Groups `Master/BGM/MusicAdd`, `Master/SFX/Effects`, `Master/SFX/FadeBgm`, and `Master/SFX/FadeAll`, if you use the matching group properties or let the manager create its own sources (it also uses `Master/BGM/Music1` and `Master/BGM/Music2`).
 

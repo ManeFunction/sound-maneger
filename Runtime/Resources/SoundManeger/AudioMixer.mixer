@@ -59,9 +59,7 @@ AudioMixerController:
   m_MasterGroup: {fileID: 24300001}
   m_Snapshots:
   - {fileID: 24500003}
-  - {fileID: 24570924}
   - {fileID: 24507720}
-  - {fileID: 24571002}
   m_StartSnapshot: {fileID: 24500003}
   m_SuspendThreshold: -80
   m_EnableSuspend: 1
@@ -71,6 +69,10 @@ AudioMixerController:
     name: BgmVolume
   - guid: 6ed2e9f126a3f7348bc1a4d697eb92ed
     name: MasterVolume
+  - guid: d1ba81d4e8f480f4db18e1617da9fa6b
+    name: Music1Volume
+  - guid: 1c960babd56f9c046a6dd81e51415380
+    name: Music2Volume
   - guid: 645e77d3ab98c3a4a9369a1fcd61fb54
     name: SfxVolume
   m_AudioMixerGroupViews:
@@ -86,7 +88,7 @@ AudioMixerController:
     - 037c08da45d66473db204f54662696e4
     name: View
   m_CurrentViewIndex: 0
-  m_TargetSnapshot: {fileID: 24500003}
+  m_TargetSnapshot: {fileID: 24507720}
 --- !u!243 &24300001
 AudioMixerGroupController:
   m_ObjectHideFlags: 0
@@ -279,7 +281,7 @@ AudioMixerSnapshotController:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Music1
+  m_Name: Music
   m_AudioMixer: {fileID: 24100000}
   m_SnapshotID: 2d1aa6b4ec2e7904c9f2d170f4986425
   m_FloatValues:
@@ -298,7 +300,7 @@ AudioMixerSnapshotController:
     66f0aaca2407a40ee8ac302a80171e9b: 22000
     4322bfda6d3e1724c81548e0a2199043: 50
     692e465b43cfa46b09eb38cb9a6fd9df: 22000
-    1c960babd56f9c046a6dd81e51415380: -80
+    1c960babd56f9c046a6dd81e51415380: 0
     0120f5fb56bdd8645b4359f3b1a1065c: 3.3
     a302600c3ea244621b24125b59db974e: 3.3
     328d314c9e50147ddbf20817dd35b087: 3.3
@@ -320,7 +322,7 @@ AudioMixerSnapshotController:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Music1Lowpass
+  m_Name: MusicLowpass
   m_AudioMixer: {fileID: 24100000}
   m_SnapshotID: 0259d2888d48ee948bc86e4487984e4b
   m_FloatValues:
@@ -334,7 +336,7 @@ AudioMixerSnapshotController:
     b8226788ad3a48249bf40d13e5e7b6e3: -29.7
     806d4c699eaa1df43bf1eaf29ab0a6af: -29.7
     66f0aaca2407a40ee8ac302a80171e9b: 1000
-    1c960babd56f9c046a6dd81e51415380: -80
+    1c960babd56f9c046a6dd81e51415380: 0
     0120f5fb56bdd8645b4359f3b1a1065c: 3.3
     328d314c9e50147ddbf20817dd35b087: 3.3
     693aac5c4ea5a4466ae76d3b17c15002: 1000
@@ -344,96 +346,6 @@ AudioMixerSnapshotController:
     7ffd6b6e269093447babe0b7428696d5: 0
     9a65959ea317346b7a3290392c9eb80e: 3.3
     920cd49f1d0f74a22890e8def1dff080: -29.7
-  m_TransitionOverrides: {}
---- !u!245 &24570924
-AudioMixerSnapshotController:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: Music2
-  m_AudioMixer: {fileID: 24100000}
-  m_SnapshotID: a6ac75812f83c294d802e3cd30109703
-  m_FloatValues:
-    320a48d0dc6a0fc4dafe02b63f641b6e: 2000
-    e617cf41380fb45e99ef627daca33245: -29.7
-    871453c1bff722b45aae45da50a3208a: 500
-    21a371f115e0b154eb3d4d75d539c939: 22000
-    6ed2e9f126a3f7348bc1a4d697eb92ed: -0.025776725
-    8190e3b2e63dc5e4a8720aeceec2883f: 2100
-    24cde163cbc7d0a48b3439f57eaa518c: 30
-    97256093ba8eaad4db6ae39b1f202d48: 1
-    95a8d3b3d21954d9598a875d010bf606: 22000
-    645e77d3ab98c3a4a9369a1fcd61fb54: 0
-    89e95dc4cb20aeb4b9dd4d4495d265bc: 940
-    d1ba81d4e8f480f4db18e1617da9fa6b: -80
-    6e031665b3a595548806add7744a62b5: 3.3
-    e5caae655b6f6044cad22a5f8d30eb7f: 22000
-    9168f7b69e8658b4ea403f3a20cd9545: -5
-    8a135027c43756a4991ad4e4f83e6aeb: 0.5
-    0de5ad37d0490d642a4b4c7da906e4f4: -10000
-    b8226788ad3a48249bf40d13e5e7b6e3: -29.7
-    806d4c699eaa1df43bf1eaf29ab0a6af: -29.7
-    66f0aaca2407a40ee8ac302a80171e9b: 22000
-    2c5f205b289cb1c49adb982884f2a44a: 0
-    1c960babd56f9c046a6dd81e51415380: 0
-    0120f5fb56bdd8645b4359f3b1a1065c: 3.3
-    92f5533c5270e2842b9654b39b3c8dd8: 20
-    328d314c9e50147ddbf20817dd35b087: 3.3
-    693aac5c4ea5a4466ae76d3b17c15002: 22000
-    e09218ecc87617840a2f18e560ebd2e7: 0
-    98adc6fc2a1a04c3ea8a4d719c0e24a6: 0
-    1554ff9da4177487bbd2fdf0f51d6918: 0
-    0c13ab3ea0cdc964ca4b6c646100f0fb: 2000
-    899adc5ef48dfb44d8917e9048fa2c40: 120
-    7ffd6b6e269093447babe0b7428696d5: 0
-    4810e39e05a7ac2419eae6b201045d25: 940
-    9a65959ea317346b7a3290392c9eb80e: 3.3
-    472263ceb7c3df243bdfb9fdebabd5bc: 0
-    920cd49f1d0f74a22890e8def1dff080: -29.7
-    540d2f9faaad9b8488409fcb4c07ec99: 0.1
-  m_TransitionOverrides: {}
---- !u!245 &24571002
-AudioMixerSnapshotController:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: Music2Lowpass
-  m_AudioMixer: {fileID: 24100000}
-  m_SnapshotID: 0f490882d8ae3ff478c75639b6aec46d
-  m_FloatValues:
-    320a48d0dc6a0fc4dafe02b63f641b6e: 2000
-    e617cf41380fb45e99ef627daca33245: -29.7
-    871453c1bff722b45aae45da50a3208a: 500
-    21a371f115e0b154eb3d4d75d539c939: 1000
-    8190e3b2e63dc5e4a8720aeceec2883f: 2100
-    97256093ba8eaad4db6ae39b1f202d48: 1
-    95a8d3b3d21954d9598a875d010bf606: 1000
-    89e95dc4cb20aeb4b9dd4d4495d265bc: 940
-    d1ba81d4e8f480f4db18e1617da9fa6b: -80
-    6e031665b3a595548806add7744a62b5: 3.3
-    e5caae655b6f6044cad22a5f8d30eb7f: 22000
-    8a135027c43756a4991ad4e4f83e6aeb: 0.5
-    0de5ad37d0490d642a4b4c7da906e4f4: -10000
-    b8226788ad3a48249bf40d13e5e7b6e3: -29.7
-    806d4c699eaa1df43bf1eaf29ab0a6af: -29.7
-    66f0aaca2407a40ee8ac302a80171e9b: 1000
-    2c5f205b289cb1c49adb982884f2a44a: 0
-    1c960babd56f9c046a6dd81e51415380: 0
-    0120f5fb56bdd8645b4359f3b1a1065c: 3.3
-    92f5533c5270e2842b9654b39b3c8dd8: 20
-    328d314c9e50147ddbf20817dd35b087: 3.3
-    693aac5c4ea5a4466ae76d3b17c15002: 1000
-    e09218ecc87617840a2f18e560ebd2e7: 0
-    98adc6fc2a1a04c3ea8a4d719c0e24a6: 0
-    1554ff9da4177487bbd2fdf0f51d6918: 0
-    0c13ab3ea0cdc964ca4b6c646100f0fb: 2000
-    7ffd6b6e269093447babe0b7428696d5: 0
-    4810e39e05a7ac2419eae6b201045d25: 940
-    9a65959ea317346b7a3290392c9eb80e: 3.3
-    920cd49f1d0f74a22890e8def1dff080: -29.7
-    540d2f9faaad9b8488409fcb4c07ec99: 0.1
   m_TransitionOverrides: {}
 --- !u!243 &243230508195005118
 AudioMixerGroupController:

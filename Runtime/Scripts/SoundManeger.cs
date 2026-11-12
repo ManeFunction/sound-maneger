@@ -11,8 +11,8 @@ using UnityEngine.Audio;
 namespace Mane.Unity.SoundManeger
 {
     /// <summary>
-    /// Audio manager singleton. Music plays on two sources crossfaded by <see cref="AudioMixer"/> snapshots,
-    /// as a single looped track or a playlist. Sound effects can duck the music or all other sounds,
+    /// Audio manager singleton. Music plays on two sources crossfaded along easing curves through their
+    /// <see cref="AudioMixer"/> group volumes, as a single looped track or a playlist. Sound effects can duck the music or all other sounds,
     /// with a limit of simultaneous copies of the same clip. Clips are passed directly or loaded by path
     /// through an <see cref="IClipLoader"/> (<see cref="ResourcesClipLoader"/> by default).
     /// Put the package prefab into your first scene, or let <see cref="UnitySingleton{T}.Instance"/>
@@ -84,6 +84,13 @@ namespace Mane.Unity.SoundManeger
         [Header("Settings")]
         [Tooltip("Crossfade time in seconds between music tracks.")]
         [SerializeField] private float _transitionTime = 1.5f;
+        [Tooltip("Easing of the outgoing track in a music crossfade: the progress of its fade-out over the transition time. " +
+                 "It also yields to the incoming track, so together they are never louder than one track.")]
+        [EasingCurve]
+        [SerializeField] private AnimationCurve _fadeOutCurve = Easing.SinIn.Clone();
+        [Tooltip("Easing of the incoming track in a music crossfade: its volume over the transition time.")]
+        [EasingCurve]
+        [SerializeField] private AnimationCurve _fadeInCurve = Easing.SinOut.Clone();
         [Tooltip("Time in seconds to turn the music lowpass on or off.")]
         [SerializeField] private float _lowpassTime = 0.4f;
         [Tooltip("Order of playlist tracks, unless a PlayPlaylist call sets another one for its playlist.")]
@@ -102,10 +109,12 @@ namespace Mane.Unity.SoundManeger
         [SerializeField] private float _loadingTimeout = 30f;
 
         
-        private AudioMixerSnapshot _music1Snapshot;
-        private AudioMixerSnapshot _music2Snapshot;
-        private AudioMixerSnapshot _music1LowSnapshot;
-        private AudioMixerSnapshot _music2LowSnapshot;
+        private AudioMixerSnapshot _musicSnapshot;
+        private AudioMixerSnapshot _musicLowSnapshot;
+        // Volume of each music source from 0 to 1, set to the exposed Music1Volume / Music2Volume.
+        // The first track plays on the first source at full volume; the second one has no clip until then.
+        private float _music1Volume = 1f;
+        private float _music2Volume;
 
         // Set here, not in Awake(), so a SetClipLoader() call made before Awake() is kept
         private IClipLoader _clipLoader = new ResourcesClipLoader();
@@ -236,21 +245,22 @@ namespace Mane.Unity.SoundManeger
                 return;
             }
 
-            _music1Snapshot = _mixer.FindSnapshot("Music1");
-            _music1LowSnapshot = _mixer.FindSnapshot("Music1Lowpass");
-            _music2Snapshot = _mixer.FindSnapshot("Music2");
-            _music2LowSnapshot = _mixer.FindSnapshot("Music2Lowpass");
+            _musicSnapshot = _mixer.FindSnapshot("Music");
+            _musicLowSnapshot = _mixer.FindSnapshot("MusicLowpass");
 
-            if (_music1Snapshot == null || _music2Snapshot == null)
+            // The crossfade sets the music group volumes, so it needs them exposed
+            if (_musicSnapshot == null ||
+                !_mixer.GetFloat("Music1Volume", out _) || !_mixer.GetFloat("Music2Volume", out _))
             {
-                Debug.LogError("[SoundManeger] Missing required snapshots Music1/Music2! Music features will be disabled.");
+                Debug.LogError("[SoundManeger] Missing required Music snapshot or exposed Music1Volume/Music2Volume! " +
+                               "Music features will be disabled.");
                 _mixer = null;
                 return;
             }
 
-            if (_music1LowSnapshot == null || _music2LowSnapshot == null)
+            if (_musicLowSnapshot == null)
             {
-                Debug.LogWarning("[SoundManeger] Missing lowpass snapshots! Lowpass feature will be disabled.");
+                Debug.LogWarning("[SoundManeger] Missing MusicLowpass snapshot! Lowpass feature will be disabled.");
                 _lowpass = false;
             }
         }
@@ -303,7 +313,8 @@ namespace Mane.Unity.SoundManeger
         }
 
         /// <summary>
-        /// Mixer the manager plays through. Null when it is missing or has no <c>Music1</c> / <c>Music2</c> snapshots.
+        /// Mixer the manager plays through. Null when it is missing, or has no <c>Music</c> snapshot
+        /// or no exposed <c>Music1Volume</c> / <c>Music2Volume</c>.
         /// </summary>
         public AudioMixer Mixer => _mixer;
 
@@ -348,6 +359,31 @@ namespace Mane.Unity.SoundManeger
         {
             get => _transitionTime;
             set => _transitionTime = value;
+        }
+
+        /// <summary>
+        /// Easing of the outgoing track in a music crossfade: the progress of its fade-out from 0 to 1 over
+        /// <see cref="TransitionTime"/>, so its volume (amplitude) is 1 minus the curve.
+        /// The outgoing track also yields to the incoming one, so together they are never louder than one track:
+        /// their powers add up to at most 1, or their amplitudes for the same piece (<c>PlayMusic(clip, true)</c>).
+        /// <c>SinIn</c> by default: with the default <c>SinOut</c> of <see cref="FadeInCurve"/>, the powers always add up
+        /// to 1, so the loudness of different tracks stays the same through the crossfade. Null sets <c>SinIn</c>.
+        /// </summary>
+        public AnimationCurve FadeOutCurve
+        {
+            get => _fadeOutCurve;
+            set => _fadeOutCurve = value ?? Easing.SinIn.Clone();
+        }
+
+        /// <summary>
+        /// Easing of the incoming track in a music crossfade: its volume (amplitude) from 0 to 1 over
+        /// <see cref="TransitionTime"/>. <c>SinOut</c> by default. The incoming track follows it as is; see
+        /// <see cref="FadeOutCurve"/> for how the outgoing one yields to it. Null sets <c>SinOut</c>.
+        /// </summary>
+        public AnimationCurve FadeInCurve
+        {
+            get => _fadeInCurve;
+            set => _fadeInCurve = value ?? Easing.SinOut.Clone();
         }
 
         /// <summary>
@@ -478,7 +514,7 @@ namespace Mane.Unity.SoundManeger
 
         /// <summary>
         /// Turns the lowpass filter on the music on or off, over the inspector's lowpass time. It stays on across track changes.
-        /// Does nothing when the mixer has no <c>Music1Lowpass</c> / <c>Music2Lowpass</c> snapshots.
+        /// Does nothing when the mixer has no <c>MusicLowpass</c> snapshot.
         /// </summary>
         /// <param name="enable">True to turn the lowpass on.</param>
         public void Lowpass(bool enable)
@@ -486,20 +522,26 @@ namespace Mane.Unity.SoundManeger
             if (_lowpass == enable || !HasLowpass) return;
 
             _lowpass = enable;
-            GetMusicSnapshot(_activeFirstMusicSource).TransitionTo(_lowpassTime);
+            // Only the lowpass uses snapshots. The music volumes are exposed and set by the crossfade,
+            // so the two never cut each other
+            (enable ? _musicLowSnapshot : _musicSnapshot).TransitionTo(_lowpassTime);
         }
 
-        // Missing lowpass snapshots are reported by FillMixerStuff()
-        private bool HasLowpass => _mixer != null && _music1LowSnapshot != null && _music2LowSnapshot != null;
+        // A missing lowpass snapshot is reported by FillMixerStuff()
+        private bool HasLowpass => _mixer != null && _musicLowSnapshot != null;
 
-        // Snapshot that makes the given music source audible, with the lowpass while it is on
-        private AudioMixerSnapshot GetMusicSnapshot(bool firstSource)
+        // Sets the exposed music group volumes. Once set, they no longer follow the snapshots
+        private void ApplyMusicVolumes()
         {
-            if (firstSource)
-                return _lowpass ? _music1LowSnapshot : _music1Snapshot;
+            if (_mixer == null) return;
 
-            return _lowpass ? _music2LowSnapshot : _music2Snapshot;
+            _mixer.SetFloat("Music1Volume", ToDecibels(_music1Volume));
+            _mixer.SetFloat("Music2Volume", ToDecibels(_music2Volume));
         }
+
+        // Amplitude from 0 to 1 to the mixer's -80..0 dB
+        private static float ToDecibels(float volume) =>
+            volume > 0.0001f ? 20f * Mathf.Log10(volume) : -80f;
 
         
         /// <summary>
@@ -507,12 +549,14 @@ namespace Mane.Unity.SoundManeger
         /// Cancels music that is still loading from earlier calls.
         /// </summary>
         /// <param name="clip">Track to play. Null does nothing.</param>
-        public void PlayMusic(AudioClip clip)
+        /// <param name="fromCurrentTime">When true, the track starts at the sample the music is already on, so alternate
+        /// mixes of one piece switch without a jump. With no music playing it starts from the beginning.</param>
+        public void PlayMusic(AudioClip clip, bool fromCurrentTime = false)
         {
             if (clip == null) return;
 
             StartMusicRequest();
-            PlaySingleTrack(clip);
+            PlaySingleTrack(clip, fromCurrentTime);
         }
 
         /// <summary>
@@ -591,13 +635,13 @@ namespace Mane.Unity.SoundManeger
             _musicCancellationSource = null;
         }
 
-        private bool PlaySingleTrack(AudioClip clip)
+        private bool PlaySingleTrack(AudioClip clip, bool fromCurrentTime = false)
         {
             _musicSource1.loop = true;
             _musicSource2.loop = true;
             ClearPlaylist();
 
-            return PlayMusicClip(clip);
+            return PlayMusicClip(clip, fromCurrentTime);
         }
 
         private async Task<bool> LoadSingleTrack(int request, string path)
@@ -832,8 +876,8 @@ namespace Mane.Unity.SoundManeger
 
         
         // Takes over a loaded clip: it is released when its source lets it go, or at once when it does not play.
-        // True when the clip plays
-        private bool PlayMusicClip(AudioClip clip)
+        // True when the clip plays. fromCurrentTime starts the clip where the playing music is.
+        private bool PlayMusicClip(AudioClip clip, bool fromCurrentTime = false)
         {
             if (clip == null) return false;
 
@@ -857,21 +901,17 @@ namespace Mane.Unity.SoundManeger
             {
                 if (_activeFirstMusicSource)
                 {
-                    SetMusicClip(_musicSource2, clip);
-                    _musicSource2.Play();
-                    GetMusicSnapshot(false).TransitionTo(_transitionTime);
+                    PlaySource(_musicSource2, clip, fromCurrentTime);
                     _activeFirstMusicSource = false;
                     this.TryKillCoroutine(ref _transitionAwaiter);
-                    _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource1, _transitionTime));
+                    _transitionAwaiter = StartCoroutine(MusicTransition(_musicSource1, false, fromCurrentTime));
                 }
                 else
                 {
-                    SetMusicClip(_musicSource1, clip);
-                    _musicSource1.Play();
-                    GetMusicSnapshot(true).TransitionTo(_transitionTime);
+                    PlaySource(_musicSource1, clip, fromCurrentTime);
                     _activeFirstMusicSource = true;
                     this.TryKillCoroutine(ref _transitionAwaiter);
-                    _transitionAwaiter = StartCoroutine(StopMusicSource(_musicSource2, _transitionTime));
+                    _transitionAwaiter = StartCoroutine(MusicTransition(_musicSource2, true, fromCurrentTime));
                 }
             }
             catch (Exception e)
@@ -883,15 +923,74 @@ namespace Mane.Unity.SoundManeger
             return true;
         }
 
-        private IEnumerator StopMusicSource(AudioSource source, float delay)
+        // The other source keeps playing. The crossfade blends the two, and that source is stopped
+        // only after the crossfade, by MusicTransition(). Stopping or scheduling this one cuts the blend.
+        private void PlaySource(AudioSource source, AudioClip clip, bool fromCurrentTime)
         {
-            yield return new WaitForSecondsRealtime(delay);
+            // Read before the clip changes: the active source is the other one
+            int samples = fromCurrentTime ? CurrentSamples(clip) : 0;
+
+            SetMusicClip(source, clip);
+            source.Play();
+            if (samples > 0)
+                source.timeSamples = samples;
+        }
+
+        // Where the playing music is, in samples of this clip. 0 when no music plays.
+        private int CurrentSamples(AudioClip clip)
+        {
+            AudioSource active = _activeFirstMusicSource ? _musicSource1 : _musicSource2;
+            AudioClip playing = active.clip;
+            if (!active.isPlaying || playing == null || playing.frequency <= 0 || clip.samples <= 0)
+                return 0;
+
+            return (int)((long)active.timeSamples * clip.frequency / playing.frequency % clip.samples);
+        }
+
+        // Crossfades from this source to the other one along the fade curves, then stops this one.
+        // Each source starts from the volume it has, so a crossfade that cuts into another does not jump.
+        // sameMusic: the tracks are mixes of one piece, playing in sync (fromCurrentTime)
+        private IEnumerator MusicTransition(AudioSource source, bool toFirstSource, bool sameMusic)
+        {
+            float outgoingFrom = toFirstSource ? _music2Volume : _music1Volume;
+            float incomingFrom = toFirstSource ? _music1Volume : _music2Volume;
+            for (float time = 0f; time < _transitionTime; time += Time.unscaledDeltaTime)
+            {
+                float progress = time / _transitionTime;
+                // Overshooting curves (Back, Elastic) stay within 0..1, the music never goes above 0 dB
+                float incoming = Mathf.Clamp01(incomingFrom + (1f - incomingFrom) * Evaluate(_fadeInCurve, progress));
+                float outgoing = Mathf.Clamp01(outgoingFrom * (1f - Evaluate(_fadeOutCurve, progress)));
+                outgoing = Mathf.Min(outgoing, Headroom(incoming, sameMusic));
+
+                SetMusicVolumes(toFirstSource, incoming, outgoing);
+                ApplyMusicVolumes();
+                yield return null;
+            }
+
+            SetMusicVolumes(toFirstSource, 1f, 0f);
+            ApplyMusicVolumes();
 
             source.Stop();
             // The faded out track is no longer needed
             SetMusicClip(source, null);
             _transitionAwaiter = null;
         }
+
+        // The loudest the outgoing track can be next to the incoming one, so together they are as loud as one track.
+        // Different tracks are uncorrelated, so their powers add (+3 dB for two equal ones): the outgoing amplitude
+        // is at most sqrt(1 - incoming²). Mixes of one piece in sync add like one signal (+6 dB): their amplitudes add.
+        private static float Headroom(float incoming, bool sameMusic) =>
+            sameMusic ? 1f - incoming : Mathf.Sqrt(1f - incoming * incoming);
+
+        private void SetMusicVolumes(bool toFirstSource, float incoming, float outgoing)
+        {
+            _music1Volume = toFirstSource ? incoming : outgoing;
+            _music2Volume = toFirstSource ? outgoing : incoming;
+        }
+
+        // An empty curve evaluates to 0, which would never fade, so it counts as linear
+        private static float Evaluate(AnimationCurve curve, float time) =>
+            curve != null && curve.length > 0 ? curve.Evaluate(time) : time;
 
         // Puts a clip on a music source and releases the loaded clip it replaces
         private void SetMusicClip(AudioSource source, AudioClip clip)
